@@ -93,6 +93,13 @@ int main() {
     const auto f = aligner.process(0.80, 0.0, 0.0, 9.80665, 0.0, 0.0, 0.0);
     expectNear(f.az_v, 9.80665, 0.15, "static az ~ g after tilt");
     expect(f.confidence.overall < 0.62, "no false high-confidence yaw from static-only");
+    expect(f.status != CalibrationStatus::FULLY_ALIGNED, "static is not FULLY_ALIGNED");
+    expectNear(std::abs(f.q_pv[0] * f.q_pv[0] + f.q_pv[1] * f.q_pv[1] + f.q_pv[2] * f.q_pv[2] +
+                        f.q_pv[3] * f.q_pv[3] - 1.0),
+               0.0, 1e-12, "unit quat");
+    const Eigen::Matrix3d Rnow = aligner.rotationMatrixPhoneToVehicle();
+    expectNear((Rnow.transpose() * Rnow - Eigen::Matrix3d::Identity()).norm(), 0.0, 1e-9, "R orthonormal");
+    expectNear(Rnow.determinant(), 1.0, 1e-9, "R det +1");
 
     // Invalid samples
     const auto bad = aligner.process(0.81, std::nan(""), 0, 0, 0, 0, 0);

@@ -51,6 +51,12 @@ struct FrameAlignerConfig {
     int gnss_min_sats{6};
     double gnss_max_age_s{0.50};
     double gnss_min_accel{0.35};
+    double gnss_min_speed_mps{2.0};
+    double gnss_max_abs_accel{6.0};
+    double gnss_imu_agree_rel{0.16};
+    double gnss_imu_agree_abs{0.35};
+    double gnss_sign_evidence_min{0.80};
+    double yaw_disagree_rad{0.60};
 
     double max_accel_norm{80.0};
     double max_gyro_norm{25.0};
