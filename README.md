@@ -32,4 +32,15 @@ The enhanced path is auxiliary: if camera quality is poor or the vision module f
 
 The vision/depth track is integrated experimentally across Members 3, 5, and 6 after the baseline pipeline is stable.
 
-Each member owns a testable module with an explicit interface and downstream handoff. See the work-distribution document for the exact contracts and Definition of Done.
+## Member 2 (frame alignment)
+
+Implemented under [`member2_alignment/`](member2_alignment/README.md). Documentation:
+[`docs/member2/`](docs/member2/README.md).
+
+```bash
+python3 -m pip install -r member2_alignment/requirements.txt
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
