@@ -1,0 +1,36 @@
+name: Member 2 tests
+
+on:
+  push:
+    paths:
+      - "member2_alignment/**"
+      - "docs/member2/**"
+      - "CMakeLists.txt"
+      - "pytest.ini"
+      - ".github/workflows/member2.yml"
+  pull_request:
+    paths:
+      - "member2_alignment/**"
+      - "docs/member2/**"
+      - "CMakeLists.txt"
+      - "pytest.ini"
+      - ".github/workflows/member2.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python deps
+        run: pip install -r member2_alignment/requirements.txt
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+      - name: Generate vectors
+        run: PYTHONPATH=member2_alignment/python python3 member2_alignment/python/generate_test_vectors.py

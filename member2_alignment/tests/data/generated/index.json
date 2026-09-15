@@ -1,0 +1,117 @@
+{
+  "seed": 26168,
+  "scenarios": [
+    {
+      "name": "stationary_phone",
+      "csv": "tests/data/generated/stationary_phone.csv",
+      "samples": 300,
+      "notes": "static arbitrary mount",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "arbitrary_mount",
+      "csv": "tests/data/generated/arbitrary_mount.csv",
+      "samples": 800,
+      "notes": "roll/pitch/yaw all nonzero, then forward accel",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "straight_acceleration",
+      "csv": "tests/data/generated/straight_acceleration.csv",
+      "samples": 600,
+      "notes": "sustained ax",
+      "final_status": 4,
+      "final_confidence": 0.8413701496661268
+    },
+    {
+      "name": "braking",
+      "csv": "tests/data/generated/braking.csv",
+      "samples": 700,
+      "notes": "accel then brake",
+      "final_status": 4,
+      "final_confidence": 0.8422758894185812
+    },
+    {
+      "name": "turning",
+      "csv": "tests/data/generated/turning.csv",
+      "samples": 800,
+      "notes": "accel then left turn",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "pothole",
+      "csv": "tests/data/generated/pothole.csv",
+      "samples": 500,
+      "notes": "shock must not set yaw",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "vibration",
+      "csv": "tests/data/generated/vibration.csv",
+      "samples": 500,
+      "notes": "engine vibration",
+      "final_status": 0,
+      "final_confidence": 0.0
+    },
+    {
+      "name": "phone_movement",
+      "csv": "tests/data/generated/phone_movement.csv",
+      "samples": 600,
+      "notes": "user rotates phone after partial calib",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "weak_acceleration",
+      "csv": "tests/data/generated/weak_acceleration.csv",
+      "samples": 600,
+      "notes": "below yaw threshold",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "gnss_assisted",
+      "csv": "tests/data/generated/gnss_assisted.csv",
+      "samples": 600,
+      "notes": "GNSS dv/dt signs forward",
+      "final_status": 4,
+      "final_confidence": 0.8393974862187508
+    },
+    {
+      "name": "noisy_imu",
+      "csv": "tests/data/generated/noisy_imu.csv",
+      "samples": 600,
+      "notes": "white IMU noise",
+      "final_status": 0,
+      "final_confidence": 0.0
+    },
+    {
+      "name": "gyro_bias",
+      "csv": "tests/data/generated/gyro_bias.csv",
+      "samples": 600,
+      "notes": "constant gyro bias in phone frame",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "accel_bias",
+      "csv": "tests/data/generated/accel_bias.csv",
+      "samples": 600,
+      "notes": "constant accel bias",
+      "final_status": 2,
+      "final_confidence": 0.5
+    },
+    {
+      "name": "motion_dropout",
+      "csv": "tests/data/generated/motion_dropout.csv",
+      "samples": 1000,
+      "notes": "temporary loss of accel evidence",
+      "final_status": 4,
+      "final_confidence": 0.8031249536494011
+    }
+  ]
+}
