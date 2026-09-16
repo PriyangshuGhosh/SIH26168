@@ -1,0 +1,29 @@
+name: Member 5 tests
+
+on:
+  push:
+    paths:
+      - "member5_engine/**"
+      - "member2_alignment/**"
+      - "docs/member5/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member5.yml"
+  pull_request:
+    paths:
+      - "member5_engine/**"
+      - "member2_alignment/**"
+      - "docs/member5/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member5.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSIH26168_BUILD_MEMBER5=ON
+          cmake --build build -j
+      - name: CTest member5
+        run: ctest --test-dir build -R member5 --output-on-failure

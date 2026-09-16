@@ -37,6 +37,14 @@ The vision/depth track is integrated experimentally across Members 3, 5, and 6 a
 Implemented under [`member2_alignment/`](member2_alignment/README.md). Documentation:
 [`docs/member2/`](docs/member2/README.md).
 
+## Member 5 (native IDR engine)
+
+Implemented under [`member5_engine/`](member5_engine/README.md). C ABI for Member 6:
+[`member5_engine/include/idr_engine_api.h`](member5_engine/include/idr_engine_api.h).
+Binding notes: [`docs/member5/INTEGRATION.md`](docs/member5/INTEGRATION.md).
+
+## Build
+
 ```bash
 python3 -m pip install -r member2_alignment/requirements.txt
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

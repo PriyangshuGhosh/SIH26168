@@ -1,4 +1,5 @@
 build/
+build-mingw/
 .cache/
 __pycache__/
 *.pyc
@@ -8,3 +9,4 @@ __pycache__/
 CMakeUserPresets.json
 member2_alignment/tests/data/generated/*.csv
 !member2_alignment/tests/data/generated/.gitkeep
+member5_engine/tests/data/*.csv
