@@ -31,6 +31,7 @@ add_library(member2_alignment
   cpp/src/FrameAligner.cpp
 )
 add_library(sih26168::member2 ALIAS member2_alignment)
+set_target_properties(member2_alignment PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(member2_alignment
   PUBLIC
