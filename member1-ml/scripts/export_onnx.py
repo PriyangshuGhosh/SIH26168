@@ -44,8 +44,10 @@ from src.data.pipeline import load_config, prepare_data, split_window_ends, writ
 from src.data.windowing import gather_windows  # noqa: E402
 from src.inference.benchmark import benchmark_report  # noqa: E402
 from src.inference.export_onnx import (  # noqa: E402
-    compare_pytorch_onnx, export_model, load_onnx_session, run_onnx, verify_shapes_and_finite,
+    ProductionInferenceModule, compare_pytorch_onnx, export_model, export_production_model,
+    load_onnx_session, run_onnx, verify_shapes_and_finite,
 )
+from src.inference.member2_interface import DECIMATION_FACTOR, PRODUCTION_RAW_WINDOW  # noqa: E402
 from src.training.train import load_checkpoint  # noqa: E402
 
 
@@ -61,7 +63,7 @@ def resolve_checkpoint(args) -> tuple[Path, int, str]:
 def value_range_checks(out: dict[str, np.ndarray], uncertainty: bool) -> dict[str, bool]:
     checks = {"velocity_nonnegative": bool(np.all(out["velocity_mps"] >= 0.0))}
     if uncertainty:
-        checks["sigma_positive"] = bool(np.all(out["uncertainty"] > 0.0))
+        checks["variance_positive"] = bool(np.all(out["velocity_variance_m2s2"] > 0.0))
         checks["confidence_in_0_1"] = bool(np.all((out["confidence"] > 0.0) & (out["confidence"] <= 1.0)))
     return checks
 
@@ -78,6 +80,13 @@ def main() -> int:
     parser.add_argument("--n-samples", type=int, default=512, help="number of real validation windows used for the PyTorch/ONNX agreement check")
     parser.add_argument("--atol", type=float, default=1e-4)
     parser.add_argument("--rtol", type=float, default=1e-3)
+    parser.add_argument("--production", action="store_true",
+                         help="export the production Member 2 interface graph instead: input is "
+                              "[B, 200, 6] (2 s at Member 2's genuine 100 Hz), decimated to 10 Hz "
+                              "inside the ONNX graph (see src.inference.member2_interface). Requires "
+                              "a checkpoint trained with window=20; no genuine 100 Hz data exists in "
+                              "this repo, so the PyTorch/ONNX agreement check below runs on synthetic "
+                              "100 Hz-shaped input only, not real recordings (docs/production_100hz.md).")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -89,6 +98,61 @@ def main() -> int:
     print(f"  arch={payload['arch']}  uncertainty={model.uncertainty}  n_parameters={sum(p.numel() for p in model.parameters())}")
 
     out_path = Path(args.out) if args.out else ckpt_path.with_suffix(".onnx")
+
+    if args.production:
+        if window * DECIMATION_FACTOR != PRODUCTION_RAW_WINDOW:
+            raise SystemExit(f"--production requires a window={PRODUCTION_RAW_WINDOW // DECIMATION_FACTOR} "
+                              f"checkpoint (2 s at 10 Hz decimated from 200 samples at 100 Hz); got window={window}. "
+                              f"See docs/production_100hz.md.")
+        onnx_path = export_production_model(model, out_path, native_window=window, opset=args.opset)
+        onnx.checker.check_model(str(onnx_path))
+        print(f"  exported PRODUCTION graph (input [B, {PRODUCTION_RAW_WINDOW}, 6] @ 100 Hz) to {onnx_path} "
+              f"({onnx_path.stat().st_size / 1024.0:.1f} KB), passed onnx.checker")
+
+        session = load_onnx_session(onnx_path)
+        shapes = verify_shapes_and_finite(session, PRODUCTION_RAW_WINDOW, batch_sizes=(1, 8, 64))
+        for b, out in shapes.items():
+            if not all(v["finite"] for v in out.values()):
+                raise RuntimeError(f"non-finite ONNX output at batch size {b}: {out}")
+        rng_x = np.random.default_rng(1).standard_normal((16, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+        range_report = value_range_checks(run_onnx(session, rng_x), model.uncertainty)
+        if not all(range_report.values()):
+            raise RuntimeError(f"value-range check failed: {range_report}")
+        print(f"  shapes/finite OK at batch sizes {list(shapes)}; value-range checks OK: {range_report}")
+
+        wrapper = ProductionInferenceModule(model, native_window=window).eval()
+        with torch.no_grad():
+            torch_out = wrapper(torch.as_tensor(rng_x))
+        torch_out = torch_out if isinstance(torch_out, tuple) else (torch_out,)
+        onnx_out = run_onnx(session, rng_x)
+        agreement = {}
+        for name, t in zip((["velocity_mps"] if not model.uncertainty else
+                             ["velocity_mps", "velocity_variance_m2s2", "confidence"]), torch_out):
+            o = onnx_out[name]
+            diff = np.abs(t.numpy() - o)
+            ok = bool(np.allclose(t.numpy(), o, atol=args.atol, rtol=args.rtol))
+            agreement[name] = {"max_abs_diff": float(diff.max()), "allclose": ok}
+            print(f"  [synthetic 100Hz] {name}: max_abs_diff={diff.max():.3e} ({'OK' if ok else 'MISMATCH'})")
+        if not all(a["allclose"] for a in agreement.values()):
+            raise RuntimeError(f"PyTorch vs ONNX agreement failed on synthetic production input: {agreement}")
+
+        report = {
+            "checkpoint": str(ckpt_path.relative_to(ROOT)) if ckpt_path.is_relative_to(ROOT) else str(ckpt_path),
+            "onnx_path": str(onnx_path.relative_to(ROOT)) if onnx_path.is_relative_to(ROOT) else str(onnx_path),
+            "arch": payload["arch"], "native_window": window, "production_raw_window": PRODUCTION_RAW_WINDOW,
+            "decimation_factor": DECIMATION_FACTOR, "augmentation_policy": policy, "uncertainty": model.uncertainty,
+            "opset": args.opset, "shape_and_finite_check": shapes, "value_range_check": range_report,
+            "pytorch_vs_onnx_synthetic": agreement,
+            "note": ("Verified only against synthetic 100 Hz-shaped random input. No genuine 100 Hz "
+                     "IMU recording exists in this repo to validate the production graph against real "
+                     "data -- see docs/production_100hz.md. Accuracy of decimated-100Hz production "
+                     "inference has NOT been measured against real 100 Hz data."),
+        }
+        report_path = onnx_path.with_suffix(".onnx_report.json")
+        write_json(report, report_path)
+        print(f"\nProduction ONNX export checks passed (synthetic-only, see report note). Report: {report_path}")
+        return 0
+
     onnx_path = export_model(model, window, out_path, opset=args.opset)
     onnx.checker.check_model(str(onnx_path))
     print(f"  exported to {onnx_path} ({onnx_path.stat().st_size / 1024.0:.1f} KB), passed onnx.checker")

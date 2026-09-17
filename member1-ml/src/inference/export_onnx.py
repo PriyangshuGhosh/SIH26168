@@ -2,16 +2,23 @@
 
 :class:`InferenceModule` wraps a trained checkpoint's ``forward_full`` in exactly the math
 ``src.inference.predict.predict_contract`` uses to build the Member 1 -> Member 3 output contract:
-the mean clipped to ``>= 0``, sigma from the model's own clamped log-variance, and confidence from
-the model's own ``confidence_ref_sigma`` buffer (fit once after training, see
+the mean clipped to ``>= 0``, predictive variance from the model's own clamped log-variance, and
+confidence from the model's own ``confidence_ref_sigma`` buffer (fit once after training, see
 ``docs/member1_output_contract.md``). Exporting this wrapper -- instead of the bare model -- means
-the ONNX graph reproduces ``velocity_mps``/``uncertainty``/``confidence`` directly; only
+the ONNX graph reproduces ``velocity_mps``/``velocity_variance_m2s2``/``confidence`` directly; only
 ``timestamp`` is left out, because it is never a model output (the caller's IMU stream supplies it,
 in `predict_contract` and in a live deployment alike).
 
 This module only exports and verifies an already-trained PyTorch checkpoint. It does not train,
 select a model, or touch any data split -- ``scripts/export_onnx.py`` is the CLI entry point that
 loads a checkpoint and calls the functions here.
+
+:class:`ProductionInferenceModule` / :func:`export_production_model` wrap this further for Member 2's
+genuine 100 Hz ``AlignedIMUFrame`` production input (``src.inference.member2_interface``): the
+exported ONNX graph itself takes the raw ``[B, 200, 6]`` 2-second-at-100Hz window and decimates it to
+the model's native 10 Hz resolution before running the same trained blocks -- see
+``docs/production_100hz.md`` for why decimation (not retraining) is the correct fix, given no genuine
+100 Hz training data exists.
 """
 from __future__ import annotations
 
@@ -22,11 +29,14 @@ import numpy as np
 import torch
 from torch import nn
 
+from src.inference.member2_interface import DECIMATION_FACTOR, PRODUCTION_RAW_WINDOW
 from src.models.tcn_velocity import VelocityNet
 
 INPUT_NAME = "imu_window"
 OUTPUT_NAMES_POINT: tuple[str, ...] = ("velocity_mps",)
-OUTPUT_NAMES_UNCERTAINTY: tuple[str, ...] = ("velocity_mps", "uncertainty", "confidence")
+OUTPUT_NAMES_UNCERTAINTY: tuple[str, ...] = ("velocity_mps", "velocity_variance_m2s2", "confidence")
+
+PRODUCTION_INPUT_NAME = "imu_window_100hz"
 
 
 class InferenceModule(nn.Module):
@@ -34,8 +44,8 @@ class InferenceModule(nn.Module):
     of the Member 1 output contract (everything except ``timestamp``, which is not a model output).
 
     ``forward(x)`` returns ``velocity_mps [B]`` alone for a point model (``model.uncertainty is
-    False``), or ``(velocity_mps [B], uncertainty [B], confidence [B])`` for an uncertainty model --
-    a fixed output arity per model, which is what ONNX export requires.
+    False``), or ``(velocity_mps [B], velocity_variance_m2s2 [B], confidence [B])`` for an
+    uncertainty model -- a fixed output arity per model, which is what ONNX export requires.
     """
 
     def __init__(self, model: VelocityNet):
@@ -50,7 +60,38 @@ class InferenceModule(nn.Module):
             return velocity
         sigma = torch.exp(0.5 * log_var)
         confidence = self.model.confidence_from_sigma(sigma)
-        return velocity, sigma, confidence
+        variance = sigma * sigma
+        return velocity, variance, confidence
+
+
+class ProductionInferenceModule(nn.Module):
+    """Wraps :class:`InferenceModule` to accept Member 2's genuine 100 Hz ``AlignedIMUFrame`` window
+    shape directly: ``[B, PRODUCTION_RAW_WINDOW, 6]`` (200 samples = 2 s at 100 Hz), decimated inside
+    the graph to ``[B, native_window, 6]`` (10 Hz) before the unchanged trained model runs.
+
+    ``native_window`` must satisfy ``native_window * DECIMATION_FACTOR == PRODUCTION_RAW_WINDOW``
+    (i.e. 20, matching a model trained with ``window: 20`` in ``configs/member1.yaml``) -- this is
+    checked at construction, not silently mismatched, because a window-40 (4 s) checkpoint cannot
+    honestly be served behind a 2-second production input without either a 400-sample raw buffer or
+    retraining, neither of which this wrapper does implicitly.
+    """
+
+    def __init__(self, model: VelocityNet, native_window: int = PRODUCTION_RAW_WINDOW // DECIMATION_FACTOR):
+        super().__init__()
+        if native_window * DECIMATION_FACTOR != PRODUCTION_RAW_WINDOW:
+            raise ValueError(
+                f"native_window={native_window} does not decimate from PRODUCTION_RAW_WINDOW="
+                f"{PRODUCTION_RAW_WINDOW} by DECIMATION_FACTOR={DECIMATION_FACTOR}; export the "
+                f"checkpoint trained with window={PRODUCTION_RAW_WINDOW // DECIMATION_FACTOR}"
+            )
+        self.native_window = native_window
+        self.inner = InferenceModule(model)
+
+    def forward(self, x: torch.Tensor):
+        if x.shape[1] != PRODUCTION_RAW_WINDOW:
+            raise ValueError(f"expected [B, {PRODUCTION_RAW_WINDOW}, 6] (2 s at 100 Hz), got {tuple(x.shape)}")
+        decimated = x[:, DECIMATION_FACTOR - 1::DECIMATION_FACTOR, :]
+        return self.inner(decimated)
 
 
 def output_names(model: VelocityNet) -> tuple[str, ...]:
@@ -75,6 +116,32 @@ def export_model(model: VelocityNet, window: int, path: str | Path, opset: int =
         torch.onnx.export(
             wrapper, (dummy,), str(path),
             input_names=[INPUT_NAME], output_names=list(names), dynamic_axes=dynamic_axes,
+            opset_version=opset, do_constant_folding=True, dynamo=False,
+        )
+    return path
+
+
+def export_production_model(model: VelocityNet, path: str | Path, native_window: int = PRODUCTION_RAW_WINDOW // DECIMATION_FACTOR,
+                             opset: int = 17) -> Path:
+    """Export ``model`` behind the production Member 2 interface: the ONNX graph itself takes
+    ``[B, PRODUCTION_RAW_WINDOW, 6]`` (200 samples = 2 s at Member 2's genuine 100 Hz) and decimates
+    to the model's native 10 Hz resolution internally (see :class:`ProductionInferenceModule`).
+
+    ``model`` must have been trained with ``window=native_window`` (default 20, i.e. 2 s at 10 Hz) --
+    this is the only window length a 200-sample/2-second production buffer can honestly serve without
+    retraining on data that does not exist (see module docstring and ``docs/production_100hz.md``).
+    """
+    model = model.eval()
+    wrapper = ProductionInferenceModule(model, native_window=native_window).eval()
+    dummy = torch.zeros(1, PRODUCTION_RAW_WINDOW, 6, dtype=torch.float32)
+    names = output_names(model)
+    dynamic_axes = {PRODUCTION_INPUT_NAME: {0: "batch"}, **{n: {0: "batch"} for n in names}}
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with torch.no_grad():
+        torch.onnx.export(
+            wrapper, (dummy,), str(path),
+            input_names=[PRODUCTION_INPUT_NAME], output_names=list(names), dynamic_axes=dynamic_axes,
             opset_version=opset, do_constant_folding=True, dynamo=False,
         )
     return path
