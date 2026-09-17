@@ -1,0 +1,9 @@
+{
+  "platform": "desktop_cpp",
+  "android_performance": "NOT_VALIDATED",
+  "n": 300,
+  "mean_ms": 0.0123511,
+  "p50_ms": 0.000476,
+  "p95_ms": 0.0823831,
+  "p99_ms": 0.0929815
+}
