@@ -84,6 +84,9 @@ void EKFFusionEngine::stabilizeCovariance(Covariance& P) {
 bool EKFFusionEngine::validMeasurementTime(double timestamp) const {
     if (!finiteValue(timestamp)) return false;
     if (!have_time_) return true;
+    // The engine does not retain an IMU history, so applying an old measurement
+    // at the current state would be mathematically inconsistent. Measurements
+    // must therefore be time-aligned to the current filter epoch.
     return timestamp <= last_timestamp_ + config_.max_measurement_lead_s &&
            timestamp >= last_timestamp_ - config_.max_measurement_age_s;
 }
@@ -138,16 +141,18 @@ void EKFFusionEngine::predict(const member2::AlignedIMUFrame& imu, NavigationMod
         last_timestamp_ = imu.timestamp;
         state_.timestamp = imu.timestamp;
         const double gap = std::max(rawDt, 1.0);
-        P_(2, 2) += config_.accel_noise_std_mps2 * config_.accel_noise_std_mps2 * gap;
-        P_(3, 3) += config_.accel_noise_std_mps2 * config_.accel_noise_std_mps2 * gap;
-        P_(4, 4) += config_.gyro_noise_std_rps * config_.gyro_noise_std_rps * gap;
+        const double aq = config_.accel_noise_std_mps2 * config_.accel_noise_std_mps2;
+        const double gq = config_.gyro_noise_std_rps * config_.gyro_noise_std_rps;
+        P_(0, 0) += aq * gap * gap * gap / 3.0;
+        P_(1, 1) += aq * gap * gap * gap / 3.0;
+        P_(2, 2) += aq * gap;
+        P_(3, 3) += aq * gap;
+        P_(4, 4) += gq * gap;
         stabilizeCovariance(P_);
         updateNavigationState();
         return;
     }
 
-    // Integrate every part of a valid interval instead of silently truncating
-    // an interval such as 0.25 s to one 0.10 s prediction step.
     double remaining = rawDt;
     while (remaining > 0.0) {
         const double dt = std::min(remaining, config_.max_prediction_dt_s);
@@ -185,12 +190,20 @@ void EKFFusionEngine::predict(const member2::AlignedIMUFrame& imu, NavigationMod
                                  : config_.degraded_process_scale;
         const double aq = scale * config_.accel_noise_std_mps2 * config_.accel_noise_std_mps2;
         const double gq = scale * config_.gyro_noise_std_rps * config_.gyro_noise_std_rps;
-        Q(0, 0) = Q(1, 1) = 0.25 * aq * dt * dt * dt;
+        // Continuous white-acceleration discretization: position-position,
+        // position-velocity, and velocity-velocity terms are retained.
+        const double dt2 = dt * dt;
+        const double dt3 = dt2 * dt;
+        Q(0, 0) = Q(1, 1) = aq * dt3 / 3.0;
+        Q(0, 2) = Q(2, 0) = aq * dt2 / 2.0;
+        Q(1, 3) = Q(3, 1) = aq * dt2 / 2.0;
         Q(2, 2) = Q(3, 3) = aq * dt;
         Q(4, 4) = gq * dt;
-        Q(5, 5) = Q(6, 6) =
+        Q(5, 5) =
             config_.accel_bias_rw_std_mps2_sqrt_s * config_.accel_bias_rw_std_mps2_sqrt_s * dt;
-        Q(7, 7) = config_.gyro_bias_rw_std_rps_sqrt_s * config_.gyro_bias_rw_std_rps_sqrt_s * dt;
+        Q(6, 6) = Q(5, 5);
+        Q(7, 7) =
+            config_.gyro_bias_rw_std_rps_sqrt_s * config_.gyro_bias_rw_std_rps_sqrt_s * dt;
 
         P_ = F * P_ * F.transpose() + Q;
         stabilizeCovariance(P_);
@@ -294,9 +307,6 @@ void EKFFusionEngine::updateGnss(const GnssMeasurement& g) {
         if (!have_time_) {
             have_time_ = true;
             last_timestamp_ = g.timestamp;
-        }
-        // A measurement must not move the public time backwards.
-        if (!have_time_ || g.timestamp >= last_timestamp_) {
             state_.timestamp = g.timestamp;
         }
         state_.last_gnss_accepted = true;
@@ -312,18 +322,12 @@ void EKFFusionEngine::updateGnss(const GnssMeasurement& g) {
     const bool positionAccepted = updatePositionMeasurementGated(north, east, sigma * sigma);
 
     bool speedAccepted = false;
-    if (g.speed_valid && state_.mode == NavigationMode::GNSS_AIDED) {
+    if (g.speed_valid) {
         speedAccepted = updateSpeedMeasurement(
             g.speed_mps,
             std::max(config_.gnss_speed_variance_floor_m2s2, 0.05 * sigma * sigma));
     }
     state_.last_gnss_accepted = positionAccepted || speedAccepted;
-
-    // Delayed measurements may update the filter state but never rewind the
-    // externally visible navigation timestamp.
-    if (!have_time_ || g.timestamp >= last_timestamp_) {
-        state_.timestamp = g.timestamp;
-    }
     updateNavigationState();
 }
 
@@ -337,9 +341,6 @@ void EKFFusionEngine::updateAiSpeed(const AiSpeedMeasurement& speed) {
 
     state_.last_ai_speed_accepted =
         updateSpeedMeasurement(speed.velocity_mps, speed.variance_m2s2);
-    if (state_.last_ai_speed_accepted && (!have_time_ || speed.timestamp >= last_timestamp_)) {
-        state_.timestamp = speed.timestamp;
-    }
     updateNavigationState();
 }
 
