@@ -21,6 +21,14 @@ endif()
 
 add_executable(member3_cpp_tests tests/test_member3.cpp)
 target_link_libraries(member3_cpp_tests PRIVATE sih26168::member3)
+# The repository CI uses a Release build, which defines NDEBUG.  Member 3's
+# regression tests must remain active in Release so CTest cannot silently
+# report success with every assert compiled out.
+if(MSVC)
+  target_compile_options(member3_cpp_tests PRIVATE /UNDEBUG)
+else()
+  target_compile_options(member3_cpp_tests PRIVATE -UNDEBUG)
+endif()
 enable_testing()
 add_test(NAME member3_cpp_tests COMMAND member3_cpp_tests)
 
