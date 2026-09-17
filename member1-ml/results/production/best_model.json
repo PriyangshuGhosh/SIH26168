@@ -1,0 +1,44 @@
+{
+  "run": "cnn_w20",
+  "selected_by": "validation MAE",
+  "arch": "cnn",
+  "window": 20,
+  "n_parameters": 27266,
+  "receptive_field": 25,
+  "uncertainty": true,
+  "augmentation_policy": "yaw",
+  "loss": "nll",
+  "best_epoch": 26,
+  "epochs_run": 36,
+  "train_time_s": 133.45620369911194,
+  "eval_time_s": 1.163839340209961,
+  "checkpoint": "experiments/production_cnn_w20/best.pt",
+  "device": "cuda",
+  "amp_dtype": "torch.bfloat16",
+  "model_cfg": {
+    "channels": 32,
+    "kernel_size": 5,
+    "n_blocks": 3,
+    "dropout": 0.1,
+    "uncertainty": true,
+    "log_var_min": -6.0,
+    "log_var_max": 6.0
+  },
+  "evaluate_test": true,
+  "val": {
+    "n": 105676,
+    "mae_mps": 4.363574870245728,
+    "rmse_mps": 5.9915002006448335,
+    "r2": -0.11713214389737447,
+    "mae_kmh": 15.70886953288462,
+    "rmse_kmh": 21.5694007223214
+  },
+  "test": {
+    "n": 301580,
+    "mae_mps": 5.144340156424965,
+    "rmse_mps": 7.248719716545468,
+    "r2": -0.24562161585077757,
+    "mae_kmh": 18.519624563129874,
+    "rmse_kmh": 26.095390979563685
+  }
+}
