@@ -179,12 +179,12 @@ void gnss_speed_survives_position_rejection() {
     e.predict(imu(0.1), NavigationMode::GNSS_AIDED);
     const double before = e.state().v_x;
 
-    auto measurement = gnss(0.1, 17.390, 78.4917, 5.0);
+    auto measurement = gnss(0.1, 17.390, 78.4917, 4.0);
     e.updateGnss(measurement);
 
     assert(e.state().last_gnss_accepted);
     assert(e.state().v_x > before);
-    assert(e.state().v_x < 5.0);
+    assert(e.state().v_x < 4.0);
 }
 
 void ai_speed_and_gate() {
