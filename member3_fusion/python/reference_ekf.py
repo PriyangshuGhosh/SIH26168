@@ -15,8 +15,8 @@ class Config:
     speed_nis_threshold: float = 3.841
     nhc_nis_threshold: float = 3.841
     nhc_variance: float = 0.04
-    max_measurement_age_s: float = 2.0
-    max_measurement_lead_s: float = 0.10
+    max_measurement_age_s: float = 0.10
+    max_measurement_lead_s: float = 0.0
     max_prediction_dt_s: float = 0.10
     max_gap_s: float = 1.0
     accel_noise_std: float = 0.5
