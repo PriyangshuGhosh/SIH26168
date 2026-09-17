@@ -46,6 +46,10 @@ Duplicate/backward IMU timestamps are ignored. Measurements outside the configur
 
 Non-finite and physically invalid IMU, GNSS, and AI inputs are ignored. Covariance is symmetrized after propagation/updates and checked for positive-semidefinite behavior; materially negative eigenvalues are projected back to a minimum variance floor.
 
+## Python references
+
+`member3_fusion/python/reference_ekf.py` provides the process-model, covariance, NHC, and AI-speed reference. `member3_fusion/python/reference_gnss.py` provides the GNSS local-frame conversion, HDOP uncertainty convention, and NIS calculations. Together they provide a lightweight NumPy cross-check of the production mathematics.
+
 ## GNSS blackout evaluation
 
 Dead reckoning continues without GNSS. The C++ regression suite includes a deterministic 20 s synthetic straight-line blackout with a fixed 0.03 m/s² accelerometer bias and checks the resulting drift against the known synthetic trajectory. This is a repeatable sensor-bias regression, **not** a real-driving accuracy result.
@@ -63,7 +67,7 @@ ctest --test-dir build --output-on-failure
 ./build/member3_fusion/member3_benchmark
 ```
 
-The Member 3 workflow builds the repository and runs CTest on Ubuntu. The benchmark reports average/p95/p99 desktop latency for IMU prediction, GNSS update, AI-speed update, and a 100 Hz loop. Android/arm64-v8a performance is **NOT VALIDATED** by this module.
+The Member 3 workflow builds the repository and runs CTest on Ubuntu. It installs the Python test dependencies in an isolated virtual environment so the repository-wide CTest suite is reproducible. The benchmark reports average/p95/p99 desktop latency for IMU prediction, GNSS update, AI-speed update, and a 100 Hz loop. Android/arm64-v8a performance is **NOT VALIDATED** by this module.
 
 ## Downstream integration
 
