@@ -190,11 +190,11 @@ void gnss_speed_survives_position_rejection() {
 void ai_speed_and_gate() {
     EKFFusionEngine e;
     e.predict(imu(0.0), NavigationMode::DEAD_RECKONING);
-    e.updateAiSpeed({1.0, 5.0, 0.25, true});
+    e.updateAiSpeed({0.0, 4.0, 0.25, true});
     assert(e.state().last_ai_speed_accepted);
     const double velocity = e.state().v_x;
 
-    e.updateAiSpeed({1.0, 80.0, 0.01, true});
+    e.updateAiSpeed({0.0, 80.0, 0.01, true});
     assert(!e.state().last_ai_speed_accepted);
     assert(std::abs(e.state().v_x - velocity) < 1e-9);
 }
