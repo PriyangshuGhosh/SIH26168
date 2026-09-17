@@ -265,12 +265,12 @@ void deterministic_blackout_drift() {
     EKFFusionEngine e(config);
 
     e.predict(imu(0.0), NavigationMode::GNSS_AIDED);
-    // Establish a 5 m/s straight-line trajectory before the synthetic blackout.
-    e.updateAiSpeed({0.0, 5.0, 0.01, true});
+    // Establish a gate-compliant baseline velocity before the synthetic blackout.
+    e.updateAiSpeed({0.0, 4.0, 0.25, true});
     const double blackoutStartPosition = e.stateVector()(0);
+    const double trueVelocity = e.state().v_x;
 
     const double bias = 0.03;
-    const double trueVelocity = 5.0;
     const double blackoutSeconds = 20.0;
     const double dt = 0.1;
     for (int i = 1; i <= 200; ++i) {
