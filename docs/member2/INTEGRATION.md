@@ -57,7 +57,10 @@ When status is not `FULLY_ALIGNED`, vectors are still rotated by the **best avai
 
 - Consume **only** samples with `status == FULLY_ALIGNED` for training/inference of `v_x`, **or**
   train a degraded mode that uses gravity-aligned data with an explicit “yaw unknown” flag.
-- Channel order after alignment: `[ax_v, ay_v, az_v, gx_v, gy_v, gz_v]` at 100 Hz.
+- Channel order after alignment: `[ax_v, ay_v, az_v, gx_v, gy_v, gz_v]` at **100 Hz** (no
+  downsample). Member 5 packs a causal window of **T=200 samples (2 s)** as `[T, 6]` (ONNX
+  `[B, T, 6]`); graphs that use handbook `[B, 6, T]` are transposed at load time.
+- Inference stride in the engine is **10 samples** (10 Hz AI updates from the 100 Hz stream).
 - Do not assume the first two seconds are static.
 - If yaw is uncertain, `ax_v` is **not** guaranteed forward. Prefer gating on status.
 

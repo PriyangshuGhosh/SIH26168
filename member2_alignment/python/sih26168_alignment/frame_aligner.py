@@ -122,7 +122,7 @@ class FrameAligner:
         self._sensor_quality = float(np.mean(self._valid_hist)) if self._valid_hist else 0.0
 
         if not ok:
-            self._status = CalibrationStatus.INVALID if reason_invalid else self._status
+            # Reject this sample only; keep last committed alignment status.
             return self._emit(t, acc, gyro, force_status=CalibrationStatus.INVALID)
 
         if gap:
