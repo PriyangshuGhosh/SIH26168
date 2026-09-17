@@ -35,6 +35,8 @@ struct GnssMeasurement {
     double speed_mps{0.0};
     double hdop{99.0};
     int num_sats{0};
+    // Set false when the GNSS receiver did not provide a usable speed.
+    bool speed_valid{true};
 };
 
 struct AiSpeedMeasurement {
@@ -48,6 +50,8 @@ struct EKFFusionConfig {
     double gnss_max_hdop{2.5};
     int gnss_min_sats{6};
     double gnss_position_sigma_floor_m{1.0};
+    // Configurable conversion from dimensionless HDOP to horizontal 1-sigma metres.
+    double gnss_hdop_to_sigma_m{5.0};
     double gnss_speed_variance_floor_m2s2{0.25};
     double gnss_nis_threshold{5.991};
     double speed_nis_threshold{3.841};
