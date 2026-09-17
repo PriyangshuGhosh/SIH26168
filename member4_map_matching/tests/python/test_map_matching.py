@@ -186,3 +186,169 @@ def test_graphml_loads_if_present():
     )
     out = m.match(s)
     assert out.timestamp == 0.0
+
+
+def test_nearest_road_projection(matcher, network):
+    """Nearest-road baseline projects onto a nearby corridor."""
+    lat0, lon0 = 12.9716, 77.5946
+    state = NavigationState(
+        0.0,
+        lat0 + 4.0 / 111320.0,
+        lon0,
+        yaw_rad=0.0,
+        position_cov_m2=((4.0, 0.0), (0.0, 4.0)),
+    )
+    outs = matcher.nearest_road_baseline([state])
+    assert outs[0].road_segment_id != 0
+    assert outs[0].distance_to_road_m < 10.0
+
+
+def test_multiple_nearby_roads(network):
+    """At a grid intersection, candidate search returns multiple roads."""
+    index = SpatialIndex(network)
+    # Synthetic grid origin is a cross of N-S and E-W segments.
+    state = NavigationState(
+        0.0,
+        12.9716,
+        77.5946,
+        yaw_rad=0.0,
+        position_cov_m2=((9.0, 0.0), (0.0, 9.0)),
+    )
+    cands = generate_candidates(state, network, index, max_candidates=12)
+    assert len(cands) >= 2
+    ids = {c.road_segment_id for c in cands}
+    assert len(ids) >= 2
+
+
+def test_parallel_roads_temporal_continuity(matcher):
+    """Lateral jumps toward a parallel road should not flip every step."""
+    lat0, lon0 = 12.9716, 77.5946
+    dlon = 6.0 / (111320.0 * math.cos(math.radians(lat0)))
+    parallel = 80.0 / 111320.0
+    states = []
+    for i in range(24):
+        lat = lat0 + (parallel if 10 <= i <= 16 else 0.0)
+        states.append(
+            NavigationState(
+                float(i),
+                lat,
+                lon0 + i * dlon,
+                yaw_rad=math.pi / 2,
+                position_cov_m2=((25.0, 0.0), (0.0, 25.0)),
+            )
+        )
+    hmm = matcher.match_trajectory(states)
+    on_road_ids = [o.road_segment_id for o in hmm if o.is_on_road_network]
+    assert len(on_road_ids) >= 12
+    # Majority of early (pre-spike) matches share one corridor id family.
+    early = [o.road_segment_id for o in hmm[:8] if o.is_on_road_network]
+    assert early
+    assert early.count(max(set(early), key=early.count)) >= len(early) // 2
+
+
+def test_intersection_crossing(matcher):
+    """Trajectory that turns at an intersection stays on-network."""
+    lat0, lon0 = 12.9716, 77.5946
+    d = 8.0 / 111320.0
+    dlon = 8.0 / (111320.0 * math.cos(math.radians(lat0)))
+    states = []
+    # North then east through the origin cross.
+    for i in range(8):
+        states.append(
+            NavigationState(
+                float(i),
+                lat0 + i * d,
+                lon0,
+                yaw_rad=0.0,
+                position_cov_m2=((16.0, 0.0), (0.0, 16.0)),
+            )
+        )
+    for i in range(8):
+        states.append(
+            NavigationState(
+                float(8 + i),
+                lat0 + 7 * d,
+                lon0 + i * dlon,
+                yaw_rad=math.pi / 2,
+                position_cov_m2=((16.0, 0.0), (0.0, 16.0)),
+            )
+        )
+    outs = matcher.match_trajectory(states)
+    on_road = sum(1 for o in outs if o.is_on_road_network)
+    assert on_road >= len(outs) // 2
+
+
+def test_noisy_drifting_trajectory(matcher):
+    """Accumulating lateral drift still yields finite confidence outputs."""
+    lat0, lon0 = 12.9716, 77.5946
+    dlon = 5.0 / (111320.0 * math.cos(math.radians(lat0)))
+    states = []
+    for i in range(20):
+        drift = (i * 0.8) / 111320.0
+        states.append(
+            NavigationState(
+                float(i),
+                lat0 + drift,
+                lon0 + i * dlon,
+                yaw_rad=math.pi / 2,
+                position_cov_m2=((36.0, 0.0), (0.0, 36.0)),
+            )
+        )
+    outs = matcher.match_trajectory(states)
+    assert len(outs) == 20
+    assert all(0.0 <= o.confidence_score <= 1.0 + 1e-9 for o in outs)
+    assert any(o.is_on_road_network for o in outs)
+
+
+def test_no_candidate_empty_window(matcher):
+    """Far observation yields empty candidates / pass-through."""
+    matcher.reset()
+    far = NavigationState(
+        0.0,
+        0.0,
+        0.0,
+        yaw_rad=0.0,
+        position_cov_m2=((4.0, 0.0), (0.0, 4.0)),
+    )
+    out = matcher.match(far)
+    assert out.is_on_road_network is False
+    assert out.road_segment_id == 0
+    assert out.lat_snapped == pytest.approx(0.0)
+    assert out.lon_snapped == pytest.approx(0.0)
+
+
+def test_ambiguous_candidates_lower_confidence(network):
+    """Two near-equidistant candidates must not yield certainty=1."""
+    index = SpatialIndex(network)
+    # Midway between parallel E-W corridors (~40 m north of origin).
+    state = NavigationState(
+        0.0,
+        12.9716 + 40.0 / 111320.0,
+        77.5946,
+        yaw_rad=math.pi / 2,
+        position_cov_m2=((100.0, 0.0), (0.0, 100.0)),
+    )
+    cands = generate_candidates(state, network, index)
+    assert len(cands) >= 2
+    from sih26168_map_matching.viterbi import candidate_confidence
+
+    conf = candidate_confidence(state, cands[0], cands)
+    assert conf < 0.999
+
+
+def test_invalid_input_nan_and_empty(matcher):
+    """Invalid coordinates / empty trajectory must not crash."""
+    matcher.reset()
+    bad = NavigationState(
+        0.0,
+        float("nan"),
+        float("nan"),
+        yaw_rad=0.0,
+        position_cov_m2=((4.0, 0.0), (0.0, 4.0)),
+    )
+    out = matcher.match(bad)
+    assert out.is_on_road_network is False
+    assert math.isnan(out.lat_snapped) or out.confidence_score == 0.0
+
+    empty = matcher.match_trajectory([])
+    assert empty == []
