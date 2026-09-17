@@ -134,7 +134,7 @@ Or, via the production ONNX graph (raw Member 2 100 Hz input, decimated inside t
 ```python
 import onnxruntime as ort
 
-session = ort.InferenceSession("experiments/m3_final_cnn_w20.production.onnx", providers=["CPUExecutionProvider"])
+session = ort.InferenceSession("experiments/production2_cnn_mag_w20/final.production.onnx", providers=["CPUExecutionProvider"])
 velocity_mps, velocity_variance_m2s2, confidence = session.run(None, {"imu_window_100hz": raw_windows})
 # raw_windows: float32 [B, 200, 6], channel order [ax_v, ay_v, az_v, gx_v, gy_v, gz_v], 2 s at 100 Hz
 ```

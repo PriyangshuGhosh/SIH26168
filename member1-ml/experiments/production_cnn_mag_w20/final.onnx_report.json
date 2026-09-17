@@ -1,0 +1,154 @@
+{
+  "checkpoint": "experiments\\production_cnn_mag_w20\\final.pt",
+  "onnx_path": "experiments\\production_cnn_mag_w20\\final.onnx",
+  "arch": "cnn_mag",
+  "window": 20,
+  "augmentation_policy": "yaw",
+  "uncertainty": true,
+  "opset": 17,
+  "environment": {
+    "python": "3.13.13",
+    "torch": "2.11.0+cu128",
+    "onnx": "1.22.0",
+    "onnxruntime": "1.30.0"
+  },
+  "shape_and_finite_check": {
+    "1": {
+      "velocity_mps": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      }
+    },
+    "8": {
+      "velocity_mps": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      }
+    },
+    "64": {
+      "velocity_mps": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      }
+    }
+  },
+  "value_range_check": {
+    "velocity_nonnegative": true,
+    "variance_positive": true,
+    "confidence_in_0_1": true
+  },
+  "pytorch_vs_onnx": {
+    "real_validation_windows": {
+      "velocity_mps": {
+        "max_abs_diff": 2.288818359375e-05,
+        "mean_abs_diff": 2.8945505619049072e-06,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      },
+      "velocity_variance_m2s2": {
+        "max_abs_diff": 0.00011444091796875,
+        "mean_abs_diff": 1.050913124345243e-05,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      },
+      "confidence": {
+        "max_abs_diff": 5.960464477539062e-07,
+        "mean_abs_diff": 7.82310962677002e-08,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      }
+    },
+    "synthetic_random_windows": {
+      "velocity_mps": {
+        "max_abs_diff": 2.86102294921875e-06,
+        "mean_abs_diff": 1.1324882507324219e-06,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      },
+      "velocity_variance_m2s2": {
+        "max_abs_diff": 9.5367431640625e-06,
+        "mean_abs_diff": 2.0265579223632812e-06,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      },
+      "confidence": {
+        "max_abs_diff": 1.1920928955078125e-07,
+        "mean_abs_diff": 1.4901161193847656e-08,
+        "allclose": true,
+        "finite_pytorch": true,
+        "finite_onnx": true
+      }
+    }
+  },
+  "benchmark_default_threading": {
+    "n_parameters": 27650,
+    "onnx_model_size_bytes": 132914,
+    "onnx_model_size_kb": 129.798828125,
+    "batch_size": 1,
+    "n_repeats": 200,
+    "pytorch_cpu_latency_ms": 1.339271999995617,
+    "onnx_cpu_latency_ms": 0.1338199999918288,
+    "pytorch_throughput_windows_per_s": 746.6743126140714,
+    "onnx_throughput_windows_per_s": 7472.724555829182,
+    "process_memory_mb": null
+  },
+  "benchmark_single_threaded_edge": {
+    "n_parameters": 27650,
+    "onnx_model_size_bytes": 132914,
+    "onnx_model_size_kb": 129.798828125,
+    "batch_size": 1,
+    "n_repeats": 200,
+    "pytorch_cpu_latency_ms": 1.1234634999982518,
+    "onnx_cpu_latency_ms": 0.10640350000358012,
+    "pytorch_throughput_windows_per_s": 890.1045739372539,
+    "onnx_throughput_windows_per_s": 9398.187089394178,
+    "process_memory_mb": null
+  }
+}

@@ -96,8 +96,19 @@ CausalConv: left pad (k−1)·d, no right pad
 | channels / kernel | 32 / 5 | 32 / 3 |
 | receptive field (samples) | 25 (GAP covers the whole window) | 61 (≥ 40) |
 | readout | global average over the window | last time step |
-| parameters | 27,233 | 22,881 |
+| parameters | 27,233 (27,650 with `derive_magnitude_channels`) | 22,881 |
 | checkpoint size | about 124 KB | about 124 KB |
+
+**`derive_magnitude_channels`** (opt-in, `models.cnn_mag` in `configs/member1.yaml`; selected as the
+production window=20 model, see `docs/production_100hz.md`): `VelocityNet.features()` derives two
+extra channels, `|acc|` and `|gyr|` at each timestep, from the same-timestep raw 6-channel input
+(purely causal, no lookahead, no new sensor) before dividing by `input_scale` and entering the conv
+blocks. The public `[B, T, 6]` input/output contract -- and so every ONNX graph shape, the
+`ProductionWindowBuffer` interface, and `ProductionInferenceModule` -- is unaffected; only
+`VelocityNet`'s internal effective channel count (8 instead of 6) and `input_scale` buffer size
+change. `build_model("cnn_mag", model_cfg)` is a config-selection alias for `arch="cnn"` (same
+mean-pool readout); `fit_normalization(..., derive_magnitude_channels=True)` appends two scale entries
+(reusing `acc_rms`/`gyr_rms`, since magnitude shares its source triplet's physical units).
 
 - **Causality.** In eval mode, the feature at step t depends only on inputs at steps ≤ t, which tests verify. Every sample in a window is at or before the prediction point, so both readouts are causal. A TCN's last-step output also matches the output of a streaming model with a longer history, within its receptive field.
 - **Normalization inside the model.** Fitted on training rows only and saved in the checkpoint:

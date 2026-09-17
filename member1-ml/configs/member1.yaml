@@ -77,6 +77,18 @@ models:
     uncertainty: false
     log_var_min: -6.0
     log_var_max: 6.0
+  # cnn + causal |acc|/|gyr| magnitude channels (orientation-invariant, derived internally from the
+  # same 6-channel public input -- see VelocityNet.features(); external tensor contract unchanged).
+  # Selected as the production window=20 model -- see docs/production_100hz.md.
+  cnn_mag:
+    channels: 32
+    kernel_size: 5
+    n_blocks: 3
+    dropout: 0.1
+    uncertainty: false
+    log_var_min: -6.0
+    log_var_max: 6.0
+    derive_magnitude_channels: true
 
 training:
   archs: [cnn, tcn]
