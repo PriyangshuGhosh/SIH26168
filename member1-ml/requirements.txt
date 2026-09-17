@@ -1,0 +1,11 @@
+# CPU-compatible. For CUDA training install the matching PyTorch wheel first, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+numpy>=1.26          # arrays, windowing, augmentation
+scipy>=1.11          # causal IIR filtering in the physics baseline; Gaussian quantiles for uncertainty calibration
+scikit-learn>=1.4    # ridge regression baseline + feature scaling
+PyYAML>=6.0          # configs/member1.yaml
+matplotlib>=3.8      # result plots
+torch>=2.2           # causal CNN/TCN models + heteroscedastic uncertainty head (Milestones 2-3)
+onnx>=1.15           # ONNX export + graph validation (Milestone 4)
+onnxruntime>=1.17    # CPU ONNX inference for export verification and edge-latency benchmarking (Milestone 4)
+pytest>=8.0          # tests
