@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SIH26168_BUILD_MEMBER2 "Build Member 2 frame alignment" ON)
+option(SIH26168_BUILD_MEMBER3 "Build Member 3 sensor fusion" ON)
 option(SIH26168_BUILD_MEMBER5 "Build Member 5 native IDR engine" ON)
 
 enable_testing()
@@ -14,7 +15,12 @@ if(SIH26168_BUILD_MEMBER2)
   add_subdirectory(member2_alignment)
 endif()
 
-add_subdirectory(member3_fusion)
+if(SIH26168_BUILD_MEMBER3)
+  if(NOT SIH26168_BUILD_MEMBER2)
+    message(FATAL_ERROR "Member 3 requires Member 2 (set SIH26168_BUILD_MEMBER2=ON)")
+  endif()
+  add_subdirectory(member3_fusion)
+endif()
 
 option(SIH26168_BUILD_MEMBER4 "Build Member 4 offline map matching" ON)
 if(SIH26168_BUILD_MEMBER4)
