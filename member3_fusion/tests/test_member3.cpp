@@ -152,7 +152,9 @@ void gnss_position_gate() {
     e.updateGnss(gnss(0.0, 17.385, 78.4867));
     e.predict(imu(0.1), NavigationMode::GNSS_AIDED);
     const auto before = e.state();
-    e.updateGnss(gnss(0.1, 17.390, 78.4917));
+    auto measurement = gnss(0.1, 17.390, 78.4917);
+    measurement.speed_valid = false;
+    e.updateGnss(measurement);
     const auto after = e.state();
     assert(!after.last_gnss_accepted);
     assert(std::abs(after.latitude - before.latitude) < 1e-5);
