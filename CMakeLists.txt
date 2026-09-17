@@ -14,6 +14,9 @@ if(SIH26168_BUILD_MEMBER2)
   add_subdirectory(member2_alignment)
 endif()
 
+add_subdirectory(member3_fusion)
+
+
 if(SIH26168_BUILD_MEMBER5)
   if(NOT SIH26168_BUILD_MEMBER2)
     message(FATAL_ERROR "Member 5 requires Member 2 (set SIH26168_BUILD_MEMBER2=ON)")

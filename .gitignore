@@ -10,3 +10,4 @@ CMakeUserPresets.json
 member2_alignment/tests/data/generated/*.csv
 !member2_alignment/tests/data/generated/.gitkeep
 member5_engine/tests/data/*.csv
+third_party/eigen/
