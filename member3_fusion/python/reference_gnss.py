@@ -31,9 +31,11 @@ def position_nis(state_position, covariance, measured_position, hdop):
     R = np.eye(2) * sigma**2
     H = np.zeros((2, 8))
     H[0, 0] = H[1, 1] = 1.0
-    innovation = np.asarray(measured_position, dtype=float) - np.asarray(state_position, dtype=float)
+    innovation = (np.asarray(measured_position, dtype=float) -
+                  np.asarray(state_position, dtype=float))
     S = H @ covariance @ H.T + R
-    return float(innovation @ np.linalg.solve(S, innovation))
+    solved = np.linalg.solve(S, innovation)
+    return float(innovation @ solved)
 
 
 def speed_nis(vx, covariance, measured_speed, variance):
@@ -42,7 +44,7 @@ def speed_nis(vx, covariance, measured_speed, variance):
     H[0, 2] = 1.0
     R = max(float(variance), 1e-4)
     innovation = float(measured_speed) - float(vx)
-    S = float(H @ covariance @ H.T + R)
+    S = (H @ covariance @ H.T).item() + R
     return innovation * innovation / S
 
 
