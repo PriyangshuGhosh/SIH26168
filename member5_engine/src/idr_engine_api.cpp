@@ -1,4 +1,6 @@
+#ifndef IDR_ENGINE_EXPORTS
 #define IDR_ENGINE_EXPORTS
+#endif
 #include "idr_engine_api.h"
 #include "member5/Engine.hpp"
 
@@ -27,8 +29,8 @@ int idr_engine_init(const char* map_db_path, const char* onnx_model_path) {
         destroyEngineUnlocked();
         auto* engine = new sih26168::member5::Engine();
         if (!engine->start(map_db_path, onnx_model_path)) {
+            setError(engine->lastError());
             delete engine;
-            setError("engine start failed");
             return 0;
         }
         g_engine.store(engine, std::memory_order_release);
@@ -49,35 +51,70 @@ void idr_engine_shutdown(void) {
 }
 
 void idr_feed_imu(double timestamp, double ax, double ay, double az, double gx, double gy, double gz) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
-        return;
+    try {
+        sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+        if (e == nullptr) {
+            return;
+        }
+        sih26168::member5::ImuSample s{timestamp, ax, ay, az, gx, gy, gz};
+        e->feedImu(s);
+    } catch (...) {
     }
-    sih26168::member5::ImuSample s{timestamp, ax, ay, az, gx, gy, gz};
-    e->feedImu(s);
 }
 
 void idr_feed_gnss(double timestamp, double lat, double lon, double alt, double speed, double hdop,
                    int num_sats) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
-        return;
+    try {
+        sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+        if (e == nullptr) {
+            return;
+        }
+        sih26168::member5::GnssSample s{timestamp, lat, lon, alt, speed, hdop, num_sats};
+        e->feedGnss(s);
+    } catch (...) {
     }
-    sih26168::member5::GnssSample s{timestamp, lat, lon, alt, speed, hdop, num_sats};
-    e->feedGnss(s);
 }
 
 IDRNavigationOutput idr_get_current_state(void) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
+    try {
+        sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+        if (e == nullptr) {
+            IDRNavigationOutput empty{};
+            return empty;
+        }
+        return e->currentState();
+    } catch (...) {
         IDRNavigationOutput empty{};
         return empty;
     }
-    return e->currentState();
 }
 
 const char* idr_engine_last_error(void) { return g_last_error.c_str(); }
 
 int idr_engine_is_initialized(void) {
     return g_engine.load(std::memory_order_acquire) != nullptr ? 1 : 0;
+}
+
+long long idr_get_road_segment_id(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return static_cast<long long>(e->roadSegmentId());
+}
+
+int idr_is_on_road_network(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->isOnRoadNetwork();
+}
+
+const char* idr_engine_speed_backend(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return "";
+    }
+    return e->speedBackend();
 }

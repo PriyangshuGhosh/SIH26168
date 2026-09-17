@@ -8,10 +8,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(IDR_WITH_ONNXRUNTIME "Link ONNX Runtime for Member 1 speed_estimator.onnx" OFF)
 set(IDR_ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime install prefix (include/ and lib/)")
 
+if(NOT TARGET sih26168::member2)
+  message(FATAL_ERROR "Member 5 requires Member 2 (sih26168::member2).")
+endif()
+if(NOT TARGET sih26168::member3)
+  message(FATAL_ERROR "Member 5 requires Member 3 (sih26168::member3).")
+endif()
+if(NOT TARGET sih26168::member4)
+  message(FATAL_ERROR "Member 5 requires Member 4 (sih26168::member4).")
+endif()
+
 set(IDR_ENGINE_SOURCES
   src/SpeedEstimator.cpp
-  src/StubFusionEngine.cpp
-  src/StubMapMatcher.cpp
   src/Engine.cpp
   src/idr_engine_api.cpp
 )
@@ -23,20 +31,15 @@ target_include_directories(idr_engine_static
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(idr_engine_static PUBLIC sih26168::member2)
+target_link_libraries(idr_engine_static PUBLIC
+  sih26168::member2
+  sih26168::member3
+  sih26168::member4
+)
 
 if(NOT WIN32)
   find_package(Threads REQUIRED)
   target_link_libraries(idr_engine_static PUBLIC Threads::Threads)
-endif()
-
-if(IDR_WITH_ONNXRUNTIME)
-  if(IDR_ONNXRUNTIME_ROOT)
-    target_include_directories(idr_engine_static PUBLIC ${IDR_ONNXRUNTIME_ROOT}/include)
-    target_link_directories(idr_engine_static PUBLIC ${IDR_ONNXRUNTIME_ROOT}/lib)
-  endif()
-  target_compile_definitions(idr_engine_static PUBLIC IDR_WITH_ONNXRUNTIME)
-  target_link_libraries(idr_engine_static PUBLIC onnxruntime)
 endif()
 
 if(MSVC)
@@ -51,17 +54,13 @@ target_include_directories(idr_engine
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_definitions(idr_engine PRIVATE IDR_ENGINE_EXPORTS)
-target_link_libraries(idr_engine PUBLIC sih26168::member2)
+target_link_libraries(idr_engine PUBLIC
+  sih26168::member2
+  sih26168::member3
+  sih26168::member4
+)
 if(NOT WIN32)
   target_link_libraries(idr_engine PUBLIC Threads::Threads)
-endif()
-if(IDR_WITH_ONNXRUNTIME)
-  if(IDR_ONNXRUNTIME_ROOT)
-    target_include_directories(idr_engine PUBLIC ${IDR_ONNXRUNTIME_ROOT}/include)
-    target_link_directories(idr_engine PUBLIC ${IDR_ONNXRUNTIME_ROOT}/lib)
-  endif()
-  target_compile_definitions(idr_engine PUBLIC IDR_WITH_ONNXRUNTIME)
-  target_link_libraries(idr_engine PUBLIC onnxruntime)
 endif()
 
 set_target_properties(idr_engine PROPERTIES
@@ -74,20 +73,64 @@ if(ANDROID)
   set_target_properties(idr_engine PROPERTIES OUTPUT_NAME idr_engine)
 endif()
 
+if(IDR_WITH_ONNXRUNTIME)
+  set(_ort_inc "")
+  set(_ort_lib "onnxruntime")
+  if(IDR_ONNXRUNTIME_ROOT)
+    set(_ort_inc "${IDR_ONNXRUNTIME_ROOT}/include")
+  else()
+    find_path(_ort_inc onnxruntime_cxx_api.h
+      PATHS
+        "${CMAKE_SOURCE_DIR}/.cache/onnxruntime/include"
+        /usr/include
+        /usr/local/include
+      PATH_SUFFIXES onnxruntime
+    )
+    find_library(_ort_found onnxruntime
+      PATHS
+        "${CMAKE_SOURCE_DIR}/.cache/onnxruntime/lib"
+        /usr/lib
+        /usr/local/lib
+    )
+    if(_ort_found)
+      set(_ort_lib "${_ort_found}")
+    endif()
+  endif()
+  if(NOT _ort_inc)
+    message(FATAL_ERROR
+      "IDR_WITH_ONNXRUNTIME=ON but onnxruntime_cxx_api.h was not found. "
+      "Set -DIDR_ONNXRUNTIME_ROOT=/path/to/onnxruntime")
+  endif()
+  foreach(_tgt idr_engine_static idr_engine)
+    target_include_directories(${_tgt} PUBLIC ${_ort_inc})
+    if(IDR_ONNXRUNTIME_ROOT)
+      target_link_directories(${_tgt} PUBLIC ${IDR_ONNXRUNTIME_ROOT}/lib)
+    endif()
+    target_compile_definitions(${_tgt} PUBLIC IDR_WITH_ONNXRUNTIME)
+    target_link_libraries(${_tgt} PUBLIC ${_ort_lib})
+  endforeach()
+endif()
+
 add_executable(member5_cpp_tests tests/test_member5.cpp)
 target_link_libraries(member5_cpp_tests PRIVATE idr_engine_static)
+target_include_directories(member5_cpp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 add_executable(member5_benchmark tools/benchmark.cpp)
 target_link_libraries(member5_benchmark PRIVATE idr_engine_static)
+target_include_directories(member5_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 add_executable(member5_demo tools/demo.cpp)
 target_link_libraries(member5_demo PRIVATE idr_engine_static)
+target_include_directories(member5_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 add_executable(member5_synthetic_e2e tools/synthetic_e2e.cpp)
 target_link_libraries(member5_synthetic_e2e PRIVATE idr_engine_static)
+target_include_directories(member5_synthetic_e2e PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 enable_testing()
 add_test(NAME member5_cpp_tests COMMAND member5_cpp_tests)
+set_tests_properties(member5_cpp_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_test(NAME member5_benchmark COMMAND member5_benchmark)
+set_tests_properties(member5_benchmark PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_test(NAME member5_synthetic_e2e COMMAND member5_synthetic_e2e)
 set_tests_properties(member5_synthetic_e2e PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

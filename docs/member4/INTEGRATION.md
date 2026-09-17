@@ -28,16 +28,18 @@ auto matched = matcher.match(nav_state);
 // road_segment_id, confidence_score, is_on_road_network
 ```
 
-Member 5 currently ships `StubMapMatcher` for parallel development. Replace the
-stub by loading Member 4’s `.roadpack` (or keep stub behind a compile flag).
-**No Member 5 ABI change is required** if the stub’s `match(NavigationState)`
-signature is preserved — Member 4 already uses that shape.
+Member 5 production `libidr_engine` loads this `.roadpack` via `MapMatchingEngine::loadRoadpack`
+and calls `match(NavigationState)` on the EKF state. GraphML remains a Python/OSM-extract
+artifact; convert it with `python/tools/build_road_database.py` before native init.
 
-Suggested Member 5 wiring (Member 5 owns this change):
+**No Member 5 ABI change is required** for matched lat/lon/heading/confidence
+(`idr_get_current_state`). Segment id and on-road are extra C getters.
+
+Suggested Member 5 wiring (implemented):
 
 1. Link `sih26168::member4`.
-2. Prefer `MapMatchingEngine` when `map_db_path` ends with `.roadpack`.
-3. Keep `synthetic:` path behavior for Member 5’s harness if needed.
+2. Require `map_db_path` to be a readable `.roadpack`.
+3. Pass Member 3 `NavigationState` into `MapMatchingEngine::match`.
 
 ## Offline map artifact
 

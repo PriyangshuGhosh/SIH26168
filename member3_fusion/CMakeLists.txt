@@ -14,6 +14,7 @@ add_library(member3_fusion
 )
 
 add_library(sih26168::member3 ALIAS member3_fusion)
+set_target_properties(member3_fusion PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(member3_fusion
   PUBLIC

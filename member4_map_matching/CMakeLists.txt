@@ -14,6 +14,7 @@ add_library(member4_map_matching
 )
 
 add_library(sih26168::member4 ALIAS member4_map_matching)
+set_target_properties(member4_map_matching PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(member4_map_matching
   PUBLIC

@@ -461,24 +461,23 @@ void EKFFusionEngine::updateGnss(
                 gnss.hdop * gnss.hdop);
     }
 
-    if (state_.mode ==
-        NavigationMode::GNSS_AIDED) {
+    /* Apply whenever the caller invokes updateGnss with a valid fix.
+       Member 5's GNSS deficit SM decides whether to call; do not also
+       require state_.mode, which is only updated on IMU predict. */
+    updatePositionMeasurement(
+        north,
+        east,
+        positionVariance);
 
-        updatePositionMeasurement(
-            north,
-            east,
-            positionVariance);
+    if (gnss.speed_mps >= 0.0) {
+        const double speedVariance =
+            std::max(
+                0.25,
+                positionVariance * 0.05);
 
-        if (gnss.speed_mps >= 0.0) {
-            const double speedVariance =
-                std::max(
-                    0.25,
-                    positionVariance * 0.05);
-
-            updateSpeedMeasurement(
-                gnss.speed_mps,
-                speedVariance);
-        }
+        updateSpeedMeasurement(
+            gnss.speed_mps,
+            speedVariance);
     }
 
     have_gnss_ = true;

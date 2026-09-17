@@ -19,12 +19,11 @@
 | Python reference | IMPLEMENTED+TESTED — `sih26168_map_matching` package |
 | C++ runtime | IMPLEMENTED+TESTED — `MapMatchingEngine` + roadpack loader |
 | Member 3 integration | IMPLEMENTED+TESTED — consumes `member3::NavigationState` (C++ include + Python mirror) |
-| Member 5/6 output interface | IMPLEMENTED (types/docs); wiring in Member 5 still `StubMapMatcher` until Member 5 swaps engine |
+| Member 5/6 output interface | IMPLEMENTED — Member 5 production path calls `MapMatchingEngine` on `.roadpack` |
 | Documentation | IMPLEMENTED — README, ALGORITHM, INTEGRATION, STATUS |
 
 ## Limitations
 
 - Field GNSS/OSM accuracy not claimed; synthetic accuracy is labeled **SYNTHETIC VALIDATION ONLY**.
 - Android/NDK latency not measured in this workspace.
-- Member 5 still uses `StubMapMatcher` until Member 5 wires `MapMatchingEngine`.
 - Committed OSM extract is a small demo tile, not city-scale coverage.
