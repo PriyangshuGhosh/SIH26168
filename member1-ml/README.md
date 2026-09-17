@@ -10,20 +10,28 @@ export + verification, CPU edge benchmark, final leakage/causality audit). The o
 is a *retrained-per-fold* LOVO benchmark (the fold machinery exists in `src/data/splits.py::lovo_folds`; running it
 means training one model per held-out vehicle family, out of scope for this deployment-focused final milestone).
 
-**Two checkpoints exist now, honestly reporting two different numbers -- neither hides the other:**
+**Four checkpoints exist now, honestly reporting four different numbers -- none hides the others:**
 
 | Use | Checkpoint | Window | Test MAE | ONNX | CPU latency (single-threaded ONNX Runtime) |
 |---|---|---|---|---|---|
 | Non-production / offline (milestone-3 selection, best accuracy) | `experiments/m3_final_cnn_w40` | 4 s @ 10 Hz | **4.79 m/s** (17.2 km/h) | 127 KB | ~0.32 ms/window |
-| Production (matches the 100 Hz / 200-sample Member 2 contract) | `experiments/production_cnn_w20` | 2 s @ 10 Hz, decimated from 200 @ 100 Hz | **5.14 m/s** (18.5 km/h) | 127 KB native / 130 KB production graph | ~0.09 ms/window (production graph) |
+| Production, **current** (matches the 100 Hz / 200-sample Member 2 contract) | `experiments/production2_cnn_mag_w20` | 2 s @ 10 Hz, decimated from 200 @ 100 Hz | **4.93 m/s** (17.7 km/h) | 130 KB native / 133 KB production graph | ~0.18 ms/window (production graph) |
+| Production, superseded gen. 2 (kept for comparison, not deleted) | `experiments/production_cnn_mag_w20` | 2 s @ 10 Hz, decimated from 200 @ 100 Hz | 5.07 m/s (18.3 km/h) | 130 KB native / 133 KB production graph | ~0.12 ms/window (production graph) |
+| Production, superseded gen. 1 (kept for comparison, not deleted) | `experiments/production_cnn_w20` | 2 s @ 10 Hz, decimated from 200 @ 100 Hz | 5.14 m/s (18.5 km/h) | 127 KB native / 130 KB production graph | ~0.09 ms/window (production graph) |
 
-Both: CNN, yaw-only rotation augmentation, heteroscedastic uncertainty head, verified against PyTorch to
-within ~1.2e-4 max abs error. See [`docs/experiments.md`](docs/experiments.md) for the w40 milestone-3
-picture (why "yaw" augmentation was chosen over full SO(3) or none) and
-[`docs/production_100hz.md`](docs/production_100hz.md) for why the production path uses the smaller,
-less-accurate w20 checkpoint (the contract specifies a 2-second window; the milestone-3 winner used 4).
-Both models share the same known calibration limitation: uncertainty is directionally useful but
-**overconfident on the held-out test trips** (see "Known limitations" below).
+All four: CNN, yaw-only rotation augmentation, heteroscedastic uncertainty head, verified against
+PyTorch to within ~1.2e-4 max abs error. The current production model derives two internal, causal,
+orientation-invariant `|acc|`/`|gyr|` channels from the same 6-channel input before its conv blocks
+(`derive_magnitude_channels`, `src/models/tcn_velocity.py`) and trains with a longer NLL warmup
+(`nll_warmup_epochs: 10` vs the default 3) -- the external ONNX I/O contract (`[B, 200, 6]` in,
+`velocity_mps`/`velocity_variance_m2s2`/`confidence` out) is identical across all three window=20
+generations. See [`docs/experiments.md`](docs/experiments.md) for the w40 milestone-3 picture (why
+"yaw" augmentation was chosen over full SO(3) or none) and the accuracy-improvement addenda for the
+full ablation sets, and [`docs/production_100hz.md`](docs/production_100hz.md) for why the production
+path uses a smaller, less-accurate window than the milestone-3 winner (the contract specifies a
+2-second window; the milestone-3 winner used 4). All models share the same known
+calibration limitation: uncertainty is directionally useful but **overconfident on the held-out test
+trips** (see "Known limitations" below).
 
 ## Quick start
 

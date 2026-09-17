@@ -39,6 +39,16 @@ def _uncertainty_model(train_val):
     return model
 
 
+def _uncertainty_magnitude_model(train_val):
+    """cnn_mag production model: same as _uncertainty_model but with derive_magnitude_channels."""
+    tr, _, e_tr, _ = train_val
+    cfg = {**MODEL_CFG, "uncertainty": True, "derive_magnitude_channels": True}
+    model = build_model("cnn_mag", cfg).eval()
+    model.set_normalization(*fit_normalization(tr.imu, tr.target[e_tr].astype(np.float64), derive_magnitude_channels=True))
+    model.set_confidence_reference(2.0)
+    return model
+
+
 def test_point_model_contract_has_none_uncertainty_and_confidence(train_val):
     tr, va, e_tr, e_va = train_val
     model = _point_model(train_val)
@@ -358,6 +368,28 @@ def test_production_onnx_wrong_raw_window_length_raises(tmp_path, train_val):
     bad = np.random.default_rng(0).standard_normal((2, 199, 6)).astype(np.float32)  # not 200
     with pytest.raises(Exception):
         run_onnx(session, bad)
+
+
+def test_production_onnx_works_end_to_end_with_magnitude_channel_model(tmp_path, train_val):
+    """The actual production model (cnn_mag, derive_magnitude_channels=True) exported through the
+    SAME production path used by every other candidate: raw [B, 200, 6] @ 100 Hz in, decimated to
+    [B, 20, 6] inside the graph, magnitude channels derived internally by the model (not the
+    ONNX-export code) -- confirms the two features compose correctly end to end."""
+    model = _uncertainty_magnitude_model(train_val)
+    path = export_production_model(model, tmp_path / "production_mag.onnx")
+    onnx.checker.check_model(str(path))
+    session = load_onnx_session(path)
+    x = np.random.default_rng(5).standard_normal((6, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    out = run_onnx(session, x)
+    assert set(out) == {"velocity_mps", "velocity_variance_m2s2", "confidence"}
+    assert np.isfinite(out["velocity_mps"]).all() and (out["velocity_mps"] >= 0.0).all()
+    assert np.isfinite(out["velocity_variance_m2s2"]).all() and (out["velocity_variance_m2s2"] > 0.0).all()
+
+    wrapper = ProductionInferenceModule(model).eval()
+    with torch.no_grad():
+        velocity, variance, confidence = wrapper(torch.as_tensor(x))
+    np.testing.assert_allclose(out["velocity_mps"], velocity.numpy(), atol=1e-4, rtol=1e-3)
+    np.testing.assert_allclose(out["velocity_variance_m2s2"], variance.numpy(), atol=1e-4, rtol=1e-3)
 
 
 def test_predict_contract_production_matches_predict_contract_on_decimated_window(train_val):

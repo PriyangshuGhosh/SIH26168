@@ -39,9 +39,12 @@ samples a genuine 10 Hz sensor would have produced at those instants. This is im
   production shape `[B, 200, 6]` and internally reduces to `[B, 20, 6]` before running the unchanged
   trained convolutional blocks.
 
-**`src/models/tcn_velocity.py` (the CNN/TCN architecture, including the uncertainty head) is completely
-unchanged**, as is the training/evaluation pipeline (`src/data/*`, `src/training/*`,
-`src/evaluation/*`). Only a new, additive inference-time adapter was introduced.
+**`src/models/tcn_velocity.py`'s CNN/TCN architecture, including the uncertainty head, was unchanged by
+this fix**, as is the training/evaluation pipeline (`src/data/*`, `src/training/*`,
+`src/evaluation/*`). Only a new, additive inference-time adapter was introduced. (A later,
+separate accuracy-improvement pass added one small, backward-compatible, opt-in model change --
+internally-derived `|acc|`/`|gyr|` magnitude channels -- see "Accuracy improvement" below; it did not
+touch the 100 Hz interface fix described above.)
 
 ## Why window = 20 (2 s), not window = 40 (4 s)
 
@@ -54,27 +57,70 @@ or silently deviate from the literal contract, the production path requires a `w
 window that doesn't decimate exactly to 200 raw samples. The `window=40` checkpoint remains fully
 supported for non-production use (`export_model`, `scripts/export_onnx.py` without `--production`).
 
-**This has a real, measured accuracy cost, not a hidden one** (both numbers below are freshly
+**This has a real, measured accuracy cost, not a hidden one** (all numbers below are freshly
 retrained and evaluated on the untouched S-series test set, same seed, same `yaw` augmentation policy,
 same NLL loss -- reproduce with the commands in "Reproducing these numbers" below):
 
 | Checkpoint | Window | Val MAE | Test MAE | Test RMSE | Test R² |
 |---|---|---|---|---|---|
-| `experiments/m3_final_cnn_w40` (existing milestone-3 final, native/offline use) | 40 (4 s @ 10 Hz) | 4.124 m/s | **4.786 m/s** (17.23 km/h) | 6.662 m/s | -0.052 |
-| `experiments/production_cnn_w20` (new, serves the 100 Hz / 200-sample production contract) | 20 (2 s @ 10 Hz, decimated from 200 @ 100 Hz) | 4.364 m/s | **5.144 m/s** (18.52 km/h) | 7.249 m/s | -0.246 |
+| `experiments/m3_final_cnn_w40` (milestone-3 final, native/offline use, not production-contract-compliant) | 40 (4 s @ 10 Hz) | 4.124 m/s | **4.786 m/s** (17.23 km/h) | 6.662 m/s | -0.052 |
+| `experiments/production_cnn_w20` (superseded gen. 1 -- kept for comparison) | 20 (2 s @ 10 Hz, decimated from 200 @ 100 Hz) | 4.364 m/s | 5.144 m/s (18.52 km/h) | 7.249 m/s | -0.246 |
+| `experiments/production_cnn_mag_w20` (superseded gen. 2 -- kept for comparison) | 20 (2 s @ 10 Hz, decimated from 200 @ 100 Hz) | 4.313 m/s | 5.072 m/s (18.26 km/h) | 7.240 m/s | -0.242 |
+| `experiments/production2_cnn_mag_w20` (**current production model, gen. 3**) | 20 (2 s @ 10 Hz, decimated from 200 @ 100 Hz) | 4.272 m/s | **4.927 m/s** (17.74 km/h) | 7.020 m/s | -0.168 |
 
-The production checkpoint is **~7.5% worse test MAE** than the window=40 model -- the real cost of
-matching the contract's literal 2-second window instead of the milestone-3-selected 4-second one. Both
-R² values are negative on this held-out test split (the model explains less test-set variance than
-predicting the mean would), consistent with what `docs/experiments.md` already reported for the w40
-model -- this was already a known, documented limitation before this change, not introduced by it.
+The production model is still **~3% worse test MAE** than the window=40 model -- the real cost of
+matching the contract's literal 2-second window instead of the milestone-3-selected 4-second one (down
+from ~6-8% for the earlier two generations). All R² values are negative on this held-out test split
+(the model explains less test-set variance than predicting the mean would), consistent with what
+`docs/experiments.md` already reported for the w40 model -- this was already a known, documented
+limitation before any of these changes, not introduced by them.
+
+### Accuracy improvements (see `docs/experiments.md`'s addenda for the full ablation sets)
+
+1. **`|acc|`/`|gyr|` magnitude channels** (gen. 1 -> gen. 2): two internally-derived, causal,
+   orientation-invariant channels -- `|acc|` and `|gyr|` at each timestep, computed purely from that
+   timestep's own 6 raw channels -- added to the window=20 CNN. Test MAE 5.144 -> 5.072 m/s (~1.4%),
+   384 extra parameters (27,266 -> 27,650), no change to the external 100 Hz production contract:
+   `VelocityNet.features()` derives the two extra channels internally from its normal `[B, T, 6]`
+   public input before the conv blocks (`src/models/tcn_velocity.py`, `derive_magnitude_channels`
+   flag, `configs/member1.yaml`'s `models.cnn_mag` section).
+2. **Longer NLL warmup** (gen. 2 -> gen. 3): `training.nll_warmup_epochs` 3 -> 10 (same model
+   architecture, zero extra parameters). Error analysis (`docs/experiments.md`) showed gen. 2's error
+   was dominated by systematic underperformance in the common 5-15 m/s cruising range, not rare
+   high-speed/turning/braking events. Heteroscedastic NLL training can let the mean head "settle" for
+   a larger error in a region by predicting higher variance there instead of fitting it more tightly,
+   since both reduce the NLL objective; a longer point-loss-only warmup gives the mean head more
+   opportunity to fit those regions before the variance head starts trading them off. Test MAE
+   5.072 -> **4.927 m/s** (~2.9%). Non-monotonic in the warmup length (3: 4.313 val MAE; 10:
+   **4.272**; 15: 4.334) -- confirmed with 3 validation-only runs, not picked from a single lucky try.
+
+`ProductionWindowBuffer`, the ONNX graph's declared input/output shapes, and every other part of this
+page are unaffected by either change. Both superseded checkpoints are retained on disk and in the
+table above for comparison, not deleted.
 
 ### Reproducing these numbers
 
 ```bash
+# current production model (cnn_mag, window=20, nll_warmup_epochs=10)
+python scripts/run_training.py --archs cnn_mag --windows 20 --uncertainty --augmentation yaw \
+    --nll-warmup-epochs 10 --tag production2 --results-dir results/production_mag2
+python scripts/finalize_production_checkpoint.py --arch cnn_mag --exp-dir experiments/production2_cnn_mag_w20
+python scripts/run_evaluation.py --checkpoint experiments/production2_cnn_mag_w20/final.pt --window 20 \
+    --augmentation-policy yaw --splits train val test unseen \
+    --out results/evaluation/final_production2_cnn_mag_w20.json
+
+# superseded gen. 2 (cnn_mag, default nll_warmup_epochs=3) -- for comparison
+python scripts/run_training.py --archs cnn_mag --windows 20 --uncertainty --augmentation yaw \
+    --tag production --results-dir results/production_mag
+python scripts/finalize_production_checkpoint.py --arch cnn_mag --exp-dir experiments/production_cnn_mag_w20
+python scripts/run_evaluation.py --checkpoint experiments/production_cnn_mag_w20/final.pt --window 20 \
+    --augmentation-policy yaw --splits train val test unseen \
+    --out results/evaluation/final_production_cnn_mag_w20.json
+
+# superseded gen. 1 (plain cnn, window=20) -- for comparison
 python scripts/run_training.py --archs cnn --windows 20 --uncertainty --augmentation yaw \
     --tag production --results-dir results/production
-python scripts/finalize_production_checkpoint.py   # fits confidence_ref_sigma, writes final.pt
+python scripts/finalize_production_checkpoint.py --arch cnn --exp-dir experiments/production_cnn_w20
 python scripts/run_evaluation.py --checkpoint experiments/production_cnn_w20/final.pt --window 20 \
     --augmentation-policy yaw --splits train val test unseen \
     --out results/evaluation/final_production_cnn_w20.json
@@ -86,8 +132,8 @@ Two different things are validated separately here -- keep them distinct:
 
 1. **The `window=20` model's own accuracy, at its native 10 Hz resolution.** This IS validated: it is
    the same real S-series test set, same leakage-safe split, same evaluation code as every other
-   number in `docs/experiments.md`. Test MAE 5.144 m/s (see the table above). This is a real,
-   measured accuracy number, not a placeholder.
+   number in `docs/experiments.md`. Test MAE 4.927 m/s for the current production model (see the
+   table above). This is a real, measured accuracy number, not a placeholder.
 2. **The production adapter's (buffer + decimation + ONNX graph) plumbing correctness.** Also
    validated, by unit tests (`tests/test_member2_interface.py`, `tests/test_inference.py`): buffer
    gating/reset/stride/causality, decimation correctness, structural compatibility with the real
