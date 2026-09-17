@@ -62,6 +62,71 @@ void prediction_covers_full_interval() {
     assert(std::abs(e.state().v_x - 0.25) < 0.02);
 }
 
+void numerical_jacobian_matches_prediction_covariance() {
+    EKFFusionConfig config;
+    config.accel_noise_std_mps2 = 0.0;
+    config.gyro_noise_std_rps = 0.0;
+    config.accel_bias_rw_std_mps2_sqrt_s = 0.0;
+    config.gyro_bias_rw_std_rps_sqrt_s = 0.0;
+    EKFFusionEngine e(config);
+
+    e.predict(imu(0.0), NavigationMode::DEAD_RECKONING);
+    e.updateAiSpeed({0.0, 5.0, 0.25, true});
+    e.predict(imu(0.1, 0.4, -0.2, 0.8, CalibrationStatus::YAW_UNCERTAIN),
+              NavigationMode::DEAD_RECKONING);
+
+    const auto x0 = e.stateVector();
+    const auto P0 = e.covariance();
+    const double dt = 0.1;
+    const double ax = 0.7;
+    const double ay = -0.3;
+    const double gz = 0.5;
+
+    auto transition = [&](const EKFFusionEngine::StateVector& x) {
+        EKFFusionEngine::StateVector y = x;
+        const double yaw = x(4);
+        const double c = std::cos(yaw);
+        const double s = std::sin(yaw);
+        y(0) += (x(2) * c - x(3) * s) * dt;
+        y(1) += (x(2) * s + x(3) * c) * dt;
+        y(2) += (ax - x(5)) * dt;
+        y(3) += (ay - x(6)) * dt;
+        y(4) += (gz - x(7)) * dt;
+        return y;
+    };
+
+    constexpr double eps = 1.0e-6;
+    EKFFusionEngine::Covariance Fnum = EKFFusionEngine::Covariance::Zero();
+    for (int i = 0; i < EKFFusionEngine::kStateDim; ++i) {
+        auto plus = x0;
+        auto minus = x0;
+        plus(i) += eps;
+        minus(i) -= eps;
+        Fnum.col(i) = (transition(plus) - transition(minus)) / (2.0 * eps);
+    }
+
+    EKFFusionEngine::Covariance F = EKFFusionEngine::Covariance::Identity();
+    const double yaw = x0(4);
+    const double c = std::cos(yaw);
+    const double s = std::sin(yaw);
+    F(0, 2) = c * dt;
+    F(0, 3) = -s * dt;
+    F(1, 2) = s * dt;
+    F(1, 3) = c * dt;
+    F(0, 4) = (-x0(2) * s - x0(3) * c) * dt;
+    F(1, 4) = (x0(2) * c - x0(3) * s) * dt;
+    F(2, 5) = -dt;
+    F(3, 6) = -dt;
+    F(4, 7) = -dt;
+
+    assert((F - Fnum).cwiseAbs().maxCoeff() < 1.0e-7);
+
+    e.predict(imu(0.2, ax, ay, gz, CalibrationStatus::YAW_UNCERTAIN),
+              NavigationMode::DEAD_RECKONING);
+    const auto expectedP = F * P0 * F.transpose();
+    assert((e.covariance() - expectedP).cwiseAbs().maxCoeff() < 1.0e-7);
+}
+
 void nhc_requires_full_alignment() {
     EKFFusionEngine e;
     e.predict(imu(0.0), NavigationMode::DEAD_RECKONING);
@@ -104,6 +169,20 @@ void gnss_speed_is_optional() {
     measurement.speed_valid = false;
     e.updateGnss(measurement);
     assert(e.state().last_gnss_accepted);
+}
+
+void gnss_speed_survives_position_rejection() {
+    EKFFusionEngine e;
+    e.updateGnss(gnss(0.0, 17.385, 78.4867));
+    e.predict(imu(0.1), NavigationMode::GNSS_AIDED);
+    const double before = e.state().v_x;
+
+    auto measurement = gnss(0.1, 17.390, 78.4917, 5.0);
+    e.updateGnss(measurement);
+
+    assert(e.state().last_gnss_accepted);
+    assert(e.state().v_x > before);
+    assert(e.state().v_x < 5.0);
 }
 
 void ai_speed_and_gate() {
@@ -213,10 +292,12 @@ int main() {
     eight_state_contract();
     imu_propagation();
     prediction_covers_full_interval();
+    numerical_jacobian_matches_prediction_covariance();
     nhc_requires_full_alignment();
     gnss_update();
     gnss_position_gate();
     gnss_speed_is_optional();
+    gnss_speed_survives_position_rejection();
     ai_speed_and_gate();
     delayed_measurements_do_not_rewind_public_time();
     invalid_inputs_and_timestamps();
