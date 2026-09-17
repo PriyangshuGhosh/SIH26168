@@ -39,6 +39,16 @@ def _uncertainty_model(train_val):
     return model
 
 
+def _uncertainty_magnitude_model(train_val):
+    """cnn_mag production model: same as _uncertainty_model but with derive_magnitude_channels."""
+    tr, _, e_tr, _ = train_val
+    cfg = {**MODEL_CFG, "uncertainty": True, "derive_magnitude_channels": True}
+    model = build_model("cnn_mag", cfg).eval()
+    model.set_normalization(*fit_normalization(tr.imu, tr.target[e_tr].astype(np.float64), derive_magnitude_channels=True))
+    model.set_confidence_reference(2.0)
+    return model
+
+
 def test_point_model_contract_has_none_uncertainty_and_confidence(train_val):
     tr, va, e_tr, e_va = train_val
     model = _point_model(train_val)
@@ -46,8 +56,8 @@ def test_point_model_contract_has_none_uncertainty_and_confidence(train_val):
     records = predict_contract(model, va.imu, e_va, 20, ts, device=CPU)
     assert len(records) == len(e_va)
     for r, t in zip(records, ts):
-        assert set(r) == {"velocity_mps", "uncertainty", "confidence", "timestamp"}
-        assert r["uncertainty"] is None and r["confidence"] is None
+        assert set(r) == {"velocity_mps", "velocity_variance_m2s2", "confidence", "timestamp"}
+        assert r["velocity_variance_m2s2"] is None and r["confidence"] is None
         assert isinstance(r["velocity_mps"], float) and r["velocity_mps"] >= 0.0 and np.isfinite(r["velocity_mps"])
         assert r["timestamp"] == pytest.approx(float(t))
 
@@ -60,21 +70,21 @@ def test_uncertainty_model_contract_fields(train_val):
     assert len(records) == len(e_va)
     for r in records:
         assert r["velocity_mps"] >= 0.0 and np.isfinite(r["velocity_mps"])
-        assert r["uncertainty"] > 0.0 and np.isfinite(r["uncertainty"])
+        assert r["velocity_variance_m2s2"] > 0.0 and np.isfinite(r["velocity_variance_m2s2"])
         assert 0.0 < r["confidence"] <= 1.0 and np.isfinite(r["confidence"])
 
 
-def test_confidence_decreases_as_uncertainty_increases(train_val):
-    """Records with larger uncertainty must never have higher confidence (monotonicity end to end,
-    through the full predict_contract path, not just the model method in isolation)."""
+def test_confidence_decreases_as_variance_increases(train_val):
+    """Records with larger predictive variance must never have higher confidence (monotonicity end
+    to end, through the full predict_contract path, not just the model method in isolation)."""
     model = _uncertainty_model(train_val)
     tr, va, e_tr, e_va = train_val
     ts = va.t_session_s[e_va]
     records = predict_contract(model, va.imu, e_va, 20, ts, device=CPU)
-    order = sorted(records, key=lambda r: r["uncertainty"])
-    uncertainties = [r["uncertainty"] for r in order]
+    order = sorted(records, key=lambda r: r["velocity_variance_m2s2"])
+    variances = [r["velocity_variance_m2s2"] for r in order]
     confidences = [r["confidence"] for r in order]
-    assert all(u1 <= u2 for u1, u2 in zip(uncertainties, uncertainties[1:]))
+    assert all(v1 <= v2 for v1, v2 in zip(variances, variances[1:]))
     assert all(c1 >= c2 for c1, c2 in zip(confidences, confidences[1:]))
 
 
@@ -87,7 +97,7 @@ def test_timestamps_must_align_with_ends(train_val):
 
 def test_contract_matches_manual_indexed_prediction(train_val):
     """predict_contract must not duplicate the prediction path: its numbers must equal calling the
-    shared predict_indexed_uncertainty function directly."""
+    shared predict_indexed_uncertainty function directly (variance = sigma ** 2)."""
     from src.training.train import predict_indexed_uncertainty
     model = _uncertainty_model(train_val)
     tr, va, e_tr, e_va = train_val
@@ -95,7 +105,7 @@ def test_contract_matches_manual_indexed_prediction(train_val):
     records = predict_contract(model, va.imu, e_va, 20, ts, device=CPU)
     mean, sigma = predict_indexed_uncertainty(model, va.imu, e_va, 20, CPU)
     np.testing.assert_allclose([r["velocity_mps"] for r in records], mean)
-    np.testing.assert_allclose([r["uncertainty"] for r in records], sigma)
+    np.testing.assert_allclose([r["velocity_variance_m2s2"] for r in records], sigma ** 2)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="regression test for a CUDA-only device-mismatch bug")
@@ -174,8 +184,10 @@ onnxruntime = pytest.importorskip("onnxruntime", reason="onnxruntime is required
 
 from src.data.windowing import gather_windows  # noqa: E402
 from src.inference.export_onnx import (  # noqa: E402
-    compare_pytorch_onnx, export_model, load_onnx_session, run_onnx, verify_shapes_and_finite,
+    ProductionInferenceModule, compare_pytorch_onnx, export_model, export_production_model,
+    load_onnx_session, run_onnx, verify_shapes_and_finite,
 )
+from src.inference.member2_interface import DECIMATION_FACTOR, PRODUCTION_RAW_WINDOW  # noqa: E402
 
 
 def test_onnx_export_produces_a_valid_model_file(tmp_path, train_val):
@@ -212,9 +224,9 @@ def test_onnx_uncertainty_model_has_three_outputs_in_valid_ranges(tmp_path, trai
     session = load_onnx_session(path)
     x = np.random.default_rng(0).standard_normal((32, 20, 6)).astype(np.float32)
     out = run_onnx(session, x)
-    assert set(out) == {"velocity_mps", "uncertainty", "confidence"}
+    assert set(out) == {"velocity_mps", "velocity_variance_m2s2", "confidence"}
     assert np.isfinite(out["velocity_mps"]).all() and (out["velocity_mps"] >= 0.0).all()
-    assert np.isfinite(out["uncertainty"]).all() and (out["uncertainty"] > 0.0).all()
+    assert np.isfinite(out["velocity_variance_m2s2"]).all() and (out["velocity_variance_m2s2"] > 0.0).all()
     assert np.isfinite(out["confidence"]).all() and ((out["confidence"] > 0.0) & (out["confidence"] <= 1.0)).all()
 
 
@@ -273,7 +285,7 @@ def test_onnx_matches_predict_contract_end_to_end(tmp_path, train_val):
     session = load_onnx_session(path)
     out = run_onnx(session, windows)
     np.testing.assert_allclose(out["velocity_mps"], [r["velocity_mps"] for r in records], atol=1e-4, rtol=1e-3)
-    np.testing.assert_allclose(out["uncertainty"], [r["uncertainty"] for r in records], atol=1e-4, rtol=1e-3)
+    np.testing.assert_allclose(out["velocity_variance_m2s2"], [r["velocity_variance_m2s2"] for r in records], atol=1e-4, rtol=1e-3)
     np.testing.assert_allclose(out["confidence"], [r["confidence"] for r in records], atol=1e-4, rtol=1e-3)
 
 
@@ -286,6 +298,113 @@ def test_onnx_deterministic_inference(tmp_path, train_val):
     out2 = run_onnx(session, x)
     for name in out1:
         np.testing.assert_array_equal(out1[name], out2[name])
+
+
+# ------------------------------------------------------------------------- production 100Hz ONNX
+
+
+def test_export_production_model_requires_window_that_decimates_to_200():
+    """A checkpoint whose native window isn't 20 can't honestly be served behind a 200-sample
+    (2 s @ 100 Hz) production input without either a 400-sample buffer or retraining -- must raise,
+    not silently export a mismatched graph."""
+    model = build_model("cnn", MODEL_CFG).eval()  # normalization defaults are fine; never runs forward
+    with pytest.raises(ValueError):
+        ProductionInferenceModule(model, native_window=40)
+
+
+def test_production_onnx_export_accepts_raw_100hz_window_shape(tmp_path, train_val):
+    model = _uncertainty_model(train_val)
+    path = export_production_model(model, tmp_path / "production.onnx")
+    assert path.is_file() and path.stat().st_size > 0
+    onnx.checker.check_model(str(path))
+    session = load_onnx_session(path)
+    x = np.random.default_rng(0).standard_normal((4, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    out = run_onnx(session, x)
+    assert set(out) == {"velocity_mps", "velocity_variance_m2s2", "confidence"}
+    assert out["velocity_mps"].shape == (4,)
+    assert np.isfinite(out["velocity_mps"]).all() and (out["velocity_mps"] >= 0.0).all()
+    assert np.isfinite(out["velocity_variance_m2s2"]).all() and (out["velocity_variance_m2s2"] > 0.0).all()
+
+
+def test_production_onnx_matches_decimate_then_native_onnx(tmp_path, train_val):
+    """The production graph (raw 200-sample input, decimated inside the graph) must agree with
+    manually decimating first and running the existing native 20-sample export -- proving the graph's
+    internal decimation is exactly src.inference.member2_interface.decimate, not a reimplementation."""
+    from src.inference.member2_interface import decimate
+
+    model = _uncertainty_model(train_val)
+    native_path = export_model(model, 20, tmp_path / "native.onnx")
+    production_path = export_production_model(model, tmp_path / "production.onnx")
+    native_session = load_onnx_session(native_path)
+    production_session = load_onnx_session(production_path)
+
+    raw = np.random.default_rng(2).standard_normal((8, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    decimated = np.stack([decimate(w) for w in raw])
+
+    production_out = run_onnx(production_session, raw)
+    native_out = run_onnx(native_session, decimated)
+    for name in native_out:
+        np.testing.assert_allclose(production_out[name], native_out[name], atol=1e-5, rtol=1e-4)
+
+
+def test_production_onnx_matches_pytorch_production_wrapper(tmp_path, train_val):
+    model = _uncertainty_model(train_val)
+    path = export_production_model(model, tmp_path / "production.onnx")
+    session = load_onnx_session(path)
+    x = np.random.default_rng(3).standard_normal((5, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    wrapper = ProductionInferenceModule(model).eval()
+    with torch.no_grad():
+        velocity, variance, confidence = wrapper(torch.as_tensor(x))
+    out = run_onnx(session, x)
+    np.testing.assert_allclose(out["velocity_mps"], velocity.numpy(), atol=1e-4, rtol=1e-3)
+    np.testing.assert_allclose(out["velocity_variance_m2s2"], variance.numpy(), atol=1e-4, rtol=1e-3)
+    np.testing.assert_allclose(out["confidence"], confidence.numpy(), atol=1e-4, rtol=1e-3)
+
+
+def test_production_onnx_wrong_raw_window_length_raises(tmp_path, train_val):
+    model = _uncertainty_model(train_val)
+    path = export_production_model(model, tmp_path / "production.onnx")
+    session = load_onnx_session(path)
+    bad = np.random.default_rng(0).standard_normal((2, 199, 6)).astype(np.float32)  # not 200
+    with pytest.raises(Exception):
+        run_onnx(session, bad)
+
+
+def test_production_onnx_works_end_to_end_with_magnitude_channel_model(tmp_path, train_val):
+    """The actual production model (cnn_mag, derive_magnitude_channels=True) exported through the
+    SAME production path used by every other candidate: raw [B, 200, 6] @ 100 Hz in, decimated to
+    [B, 20, 6] inside the graph, magnitude channels derived internally by the model (not the
+    ONNX-export code) -- confirms the two features compose correctly end to end."""
+    model = _uncertainty_magnitude_model(train_val)
+    path = export_production_model(model, tmp_path / "production_mag.onnx")
+    onnx.checker.check_model(str(path))
+    session = load_onnx_session(path)
+    x = np.random.default_rng(5).standard_normal((6, PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    out = run_onnx(session, x)
+    assert set(out) == {"velocity_mps", "velocity_variance_m2s2", "confidence"}
+    assert np.isfinite(out["velocity_mps"]).all() and (out["velocity_mps"] >= 0.0).all()
+    assert np.isfinite(out["velocity_variance_m2s2"]).all() and (out["velocity_variance_m2s2"] > 0.0).all()
+
+    wrapper = ProductionInferenceModule(model).eval()
+    with torch.no_grad():
+        velocity, variance, confidence = wrapper(torch.as_tensor(x))
+    np.testing.assert_allclose(out["velocity_mps"], velocity.numpy(), atol=1e-4, rtol=1e-3)
+    np.testing.assert_allclose(out["velocity_variance_m2s2"], variance.numpy(), atol=1e-4, rtol=1e-3)
+
+
+def test_predict_contract_production_matches_predict_contract_on_decimated_window(train_val):
+    from src.inference.predict import predict_contract_production
+    from src.inference.member2_interface import decimate
+
+    model = _uncertainty_model(train_val)
+    raw = np.random.default_rng(4).standard_normal((PRODUCTION_RAW_WINDOW, 6)).astype(np.float32)
+    record = predict_contract_production(model, raw, timestamp=42.0, device=CPU)
+    assert record["timestamp"] == pytest.approx(42.0)
+    assert record["velocity_mps"] >= 0.0 and record["velocity_variance_m2s2"] > 0.0
+
+    decimated = decimate(raw)
+    expected = predict_contract(model, decimated, np.array([19]), 20, np.array([42.0]), device=CPU)[0]
+    assert record == expected
 
 
 # ---------------------------------------------------------------------------------------- benchmark

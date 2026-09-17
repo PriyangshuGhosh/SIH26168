@@ -124,6 +124,77 @@ def test_unknown_arch_rejected():
         build_model("lstm", MODEL_CFGS["cnn"])
 
 
+# --------------------------------------------------------------- derive_magnitude_channels (cnn_mag)
+
+MAGNITUDE_MODEL_CFG = {**MODEL_CFGS["cnn"], "derive_magnitude_channels": True}
+
+
+def test_magnitude_model_public_contract_still_six_channels():
+    """derive_magnitude_channels is an internal-only detail: the public forward()/features() input
+    is still exactly [B, T, 6], never 8 -- external callers (windowing, ONNX, member2_interface)
+    never need to know about it."""
+    model = build_model("cnn", MAGNITUDE_MODEL_CFG).eval()
+    out = model(torch.randn(4, 20, 6))
+    assert out.shape == (4,) and torch.isfinite(out).all()
+    for bad in (torch.randn(2, 20, 7), torch.randn(2, 20, 8), torch.randn(2, 20, 5)):
+        with pytest.raises(ValueError):
+            model(bad)
+
+
+def test_cnn_mag_alias_builds_cnn_arch_with_magnitude_channels():
+    """build_model("cnn_mag", ...) is a config-selection alias: VelocityNet.arch stays "cnn"
+    (mean-pool readout), only derive_magnitude_channels differs."""
+    model = build_model("cnn_mag", MAGNITUDE_MODEL_CFG).eval()
+    assert model.arch == "cnn" and model.derive_magnitude_channels is True
+    out = model(torch.randn(3, 20, 6))
+    assert out.shape == (3,) and torch.isfinite(out).all()
+
+
+def test_magnitude_channels_only_add_a_few_parameters():
+    plain = count_parameters(build_model("cnn", MODEL_CFGS["cnn"]))
+    with_mag = count_parameters(build_model("cnn", MAGNITUDE_MODEL_CFG))
+    # only the first conv layer's input width changes (6 -> 8 channels); a handful of extra weights.
+    assert 0 < with_mag - plain < 200
+
+
+def test_magnitude_channels_are_rotation_invariant():
+    """|acc| and |gyr| are the L2 norm of a rotated vector, which rotation preserves exactly -- the
+    derived magnitude channels see the SAME values whether the raw 6-channel window was rotated by
+    yaw/SO(3) augmentation or not (unlike the raw per-axis channels, which do change). This is the
+    property that motivated adding them: an orientation-invariant cue for a dataset with unknown,
+    inconsistent phone mounting per trip (docs/data_protocol.md)."""
+    from src.data.augmentation import random_rotation_matrices, rotate_windows
+
+    x = torch.randn(6, 20, 6)
+    rng = np.random.default_rng(0)
+    r = random_rotation_matrices(6, rng)
+    x_rot = torch.as_tensor(rotate_windows(x.numpy(), r))
+    torch.testing.assert_close(x[..., 0:3].norm(dim=-1), x_rot[..., 0:3].norm(dim=-1), atol=1e-4, rtol=1e-4)
+    torch.testing.assert_close(x[..., 3:6].norm(dim=-1), x_rot[..., 3:6].norm(dim=-1), atol=1e-4, rtol=1e-4)
+    assert not torch.allclose(x[..., 0], x_rot[..., 0])  # the raw per-axis channels DO change
+
+
+def test_per_step_features_are_causal_with_magnitude_channels():
+    model = build_model("cnn", MAGNITUDE_MODEL_CFG).eval()
+    x = torch.randn(3, 40, 6)
+    t = 17
+    x2 = x.clone()
+    x2[:, t + 1:] = torch.randn_like(x2[:, t + 1:]) * 50
+    torch.testing.assert_close(model.features(x)[:, :, :t + 1], model.features(x2)[:, :, :t + 1])
+    assert not torch.allclose(model.features(x)[:, :, t + 1:], model.features(x2)[:, :, t + 1:])
+
+
+def test_fit_normalization_with_magnitude_channels_appends_two_scale_entries(windows):
+    scale6, _, _ = fit_normalization(windows["train_imu"], windows["train_y"])
+    scale8, mean, std = fit_normalization(windows["train_imu"], windows["train_y"], derive_magnitude_channels=True)
+    assert scale8.shape == (8,)
+    np.testing.assert_allclose(scale8[:6], scale6)
+    assert scale8[6] == pytest.approx(scale6[0]) and scale8[7] == pytest.approx(scale6[3])  # reuse acc/gyr RMS
+    model = build_model("cnn", MAGNITUDE_MODEL_CFG).eval()
+    model.set_normalization(scale8, mean, std)  # must not raise (buffer shape matches)
+    assert model.input_scale.shape == (8,)
+
+
 # ----------------------------------------------------------------------------- loss
 
 def test_losses():
