@@ -1,0 +1,7 @@
+{
+  "arch": "cnn",
+  "window": 20,
+  "augmentation_policy": "yaw",
+  "checkpoint": "experiments/production_cnn_w20/final.pt",
+  "confidence_ref_sigma_mps": 4.243177890777588
+}

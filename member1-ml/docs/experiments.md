@@ -531,3 +531,37 @@ ablation axis into `results/ablation/`: window size (2 s vs 4 s), augmentation o
 window size and architecture), augmentation policy (none/so3/yaw/gravity_yaw, validation only, from Milestone
 3 phase 1), and loss (NLL vs point, validation only, from Milestone 3 phase 3). No new numbers are produced --
 see the milestone sections above for the numbers themselves and the reasoning behind each choice.
+
+## Post-milestone-4 addendum: production 100 Hz contract correction
+
+The project's production contract requires 100 Hz input consumed from Member 2's `AlignedIMUFrame` in a
+200-sample (2-second) causal window, and an output contract field named `velocity_variance_m2s2` (not
+`uncertainty`). Neither was true of Milestone 4's `m3_final_cnn_w40` deliverable (10 Hz-only input path,
+4-second window, `uncertainty`-named sigma field). Full writeup: `docs/production_100hz.md`,
+`docs/member1_output_contract.md`.
+
+Fix: an additive Member 2 interface adapter (`src/inference/member2_interface.py`) that decimates Member 2's
+genuine 100 Hz stream to the model's native 10 Hz resolution (no training data was fabricated), plus an
+output-field rename (`uncertainty` sigma -> `velocity_variance_m2s2` = sigma²). Because the 200-sample/2-second
+production window only decimates to a `window=20` model, a new checkpoint was trained at that window (the
+`m3_final_cnn_w40` checkpoint above, at `window=40`, cannot serve a 2-second production buffer without either
+retraining or a 400-sample buffer -- see `docs/production_100hz.md`).
+
+**Freshly retrained and evaluated on the untouched S-series test set, same seed (42), same `yaw` augmentation
+policy, same NLL loss as the table above:**
+
+| Checkpoint | Window | Val MAE | Test MAE | Test RMSE | Test R² |
+|---|---|---|---|---|---|
+| `m3_final_cnn_w40` (reconfirmed unchanged; this addendum's own retrain) | 40 | 4.124 m/s | 4.786 m/s | 6.662 m/s | -0.052 |
+| `production_cnn_w20` (new; serves the 100 Hz/200-sample production contract) | 20 | 4.364 m/s | 5.144 m/s | 7.249 m/s | -0.246 |
+
+The `m3_final_cnn_w40` row above was reproduced bit-for-bit against the numbers already in this document
+(Milestone 3's Phase 4 and Milestone 4's tables) by retraining with the identical config, seed and recipe --
+confirming the production-contract fix did not silently change the existing, unchanged evaluation path. The
+`production_cnn_w20` row is a genuinely new number, **worse** than `m3_final_cnn_w40` (test MAE +0.358 m/s,
+~7.5% relative) -- the real, measured cost of matching the contract's literal 2-second window instead of the
+4-second window Milestone 3 selected for best validation accuracy. This is not hidden: see
+`docs/production_100hz.md` and the top-level `README.md` for both numbers side by side.
+
+Both checkpoints' negative R² on this test split were already true before this change (see Milestone 3/4
+above) -- the production checkpoint is not newly failing a bar the w40 model passed.
