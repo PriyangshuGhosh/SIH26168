@@ -1,0 +1,42 @@
+{
+  "run": "tcn_w40",
+  "selected_by": "validation MAE",
+  "arch": "tcn",
+  "window": 40,
+  "n_parameters": 22881,
+  "receptive_field": 61,
+  "best_epoch": 9,
+  "epochs_run": 19,
+  "train_time_s": 71.61534547805786,
+  "eval_time_s": 1.4876341819763184,
+  "checkpoint": "experiments/m2abl_noso3_tcn_w40/best.pt",
+  "device": "cuda",
+  "amp_dtype": "torch.bfloat16",
+  "model_cfg": {
+    "channels": 32,
+    "kernel_size": 3,
+    "dilations": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "dropout": 0.1
+  },
+  "val": {
+    "n": 105636,
+    "mae_mps": 4.36956850637356,
+    "rmse_mps": 5.7880756002926,
+    "r2": -0.04283137341584986,
+    "mae_kmh": 15.730446622944816,
+    "rmse_kmh": 20.83707216105336
+  },
+  "test": {
+    "n": 301400,
+    "mae_mps": 4.72737256667994,
+    "rmse_mps": 6.701651258912358,
+    "r2": -0.06457112437078205,
+    "mae_kmh": 17.018541240047785,
+    "rmse_kmh": 24.12594453208449
+  }
+}

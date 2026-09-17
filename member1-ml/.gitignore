@@ -1,0 +1,39 @@
+# Raw datasets (never commit)
+data/*
+!data/README.md
+*.npz
+*.npy
+*.h5
+*.hdf5
+*.parquet
+*.csv.gz
+
+# Model checkpoints / exported models
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.joblib
+*.pkl
+checkpoints/
+experiments/*/checkpoints/
+
+# Claude Code private instructions (keep locally)
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# Claude Code private files
+CLAUDE.md
+.claude/

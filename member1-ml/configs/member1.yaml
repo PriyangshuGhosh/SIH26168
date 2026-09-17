@@ -1,0 +1,106 @@
+# Member 1 (SIH26168) - IMU-only vehicle speed estimation.
+# Single source of configuration; every script reads this file.
+
+seed: 42
+
+data:
+  npz_path: data/member1_imu_speed.npz
+  target_units: m/s          # target_speed_mps is already m/s; "km/h" would be converted to m/s on load
+  sample_rate_hz: 10.0
+  dt_tolerance_s: 0.02       # max |dt - 0.1 s| between consecutive rows of a valid window
+
+windowing:
+  window_sizes: [20, 40]     # 2 s and 4 s at 10 Hz
+  train_stride: 5
+  eval_stride: 1
+
+splits:
+  # Regex (full match) on trip_id. Trips matching no rule are excluded from the fixed split.
+  train: ['Vw\d+[a-z]?', 'Vfa02']
+  val: ['M']
+  test: ['S\d+[a-z]?']
+  lovo:
+    level: family            # "family" (alphabetic trip_id prefix; vehicle proxy) or "trip"
+
+augmentation:
+  so3_rotation:
+    probability: 1.0
+    max_angle_deg: 180.0     # >= 180 -> uniform over SO(3)
+  yaw_rotation:              # Milestone 3: rotation about the vertical (gravity) axis only
+    probability: 1.0
+    max_angle_deg: 180.0     # >= 180 -> uniform over the full heading circle
+
+evaluation:
+  stationary_threshold_mps: 0.5
+  speed_bins_mps: [0.0, 0.5, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, .inf]
+  calibration:
+    nominal_levels: [0.5, 0.68, 0.8, 0.9, 0.95, 0.99]   # two-sided confidence levels for the reliability curve
+
+# Milestone 3: controlled input perturbations for robustness evaluation. Magnitudes are engineering
+# assumptions for this test (plausible for a low-cost smartphone MEMS IMU), not measured dataset
+# statistics -- see src/evaluation/robustness.py.
+robustness:
+  seed: 123
+  noise: {acc_std_mps2: 0.5, gyr_std_rads: 0.05}      # sensor noise floor
+  vibration: {acc_std_mps2: 1.5, gyr_std_rads: 0.15}  # heavier high-frequency noise (road/poor mount)
+  bias: {acc_bias_std_mps2: 0.3, gyr_bias_std_rads: 0.02}     # fixed per-window calibration offset
+  drift: {acc_drift_mps2_per_s: 0.2, gyr_drift_rads_per_s: 0.01}  # slow linear bias drift
+  orientation: {max_angle_deg: 15.0}                  # small mounting-angle error
+
+baselines:
+  ridge:
+    alphas: [1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0]   # selected on validation MAE
+    with_so3_augmentation: true               # also train a variant on SO(3)-rotated training windows
+  physics:
+    gravity_tau_s: 5.0
+    axis_tau_s: 30.0
+    zupt_window_s: 1.0
+    zupt_gyr_std: 0.02
+    zupt_acc_std_grid: [0.05, 0.1, 0.2, 0.4]  # selected on training MAE
+    leak_tau_s_grid: [15.0, 60.0, 300.0, 1800.0, .inf]   # .inf = no leak (pure integration)
+
+# ---------------------------------------------------------------- Milestone 2/3: neural models
+models:
+  cnn:                       # residual non-dilated causal convs + global average pooling over the window
+    channels: 32
+    kernel_size: 5
+    n_blocks: 3
+    dropout: 0.1
+    uncertainty: false       # Milestone 3: set true (or pass --uncertainty) for the heteroscedastic head
+    log_var_min: -6.0        # clamp bounds on the RAW (standardized) log-variance head output
+    log_var_max: 6.0
+  tcn:                       # residual dilated causal convs, prediction from the last time step
+    channels: 32
+    kernel_size: 3
+    dilations: [1, 2, 4, 8]  # receptive field 1 + 2*(3-1)*15 = 61 >= 40 samples
+    dropout: 0.1
+    uncertainty: false
+    log_var_min: -6.0
+    log_var_max: 6.0
+
+training:
+  archs: [cnn, tcn]
+  device: auto               # cuda if available, else cpu
+  amp: auto                  # bfloat16 autocast on CUDA when supported; full precision on CPU
+  deterministic: true
+  batch_size: 256
+  eval_batch_size: 4096
+  max_epochs: 60
+  lr: 2.0e-3
+  weight_decay: 1.0e-2
+  warmup_epochs: 2
+  min_lr_ratio: 0.02         # cosine decay to lr * min_lr_ratio at max_epochs
+  grad_clip_norm: 1.0
+  loss: huber                # huber | mse | l1 | nll (nll requires models.<arch>.uncertainty: true)
+  huber_delta_mps: 1.0
+  warmup_loss: huber         # point loss used during nll_warmup_epochs, when loss: nll
+  nll_warmup_epochs: 3       # epochs of point-loss warmup before the variance head starts training
+  early_stopping_patience: 10
+  min_delta_mps: 0.005       # val MAE improvement needed to count as better
+  augmentation_policy: so3   # none | so3 | yaw | gravity_yaw -- see src/data/augmentation.py
+
+output:
+  results_dir: results/baselines
+  neural_results_dir: results/neural
+  experiments_dir: experiments
+  uncertainty_results_dir: results/uncertainty     # Milestone 3 orchestrator output

@@ -1,0 +1,140 @@
+Loaded 817681 rows, 34 sessions, IMU input shape (817681, 6)
+  train: 17 trips, 17 sessions, 305570 rows  ['Vfa02', 'Vw10', 'Vw11', 'Vw12', 'Vw13', 'Vw14a', 'Vw14b', 'Vw14c', 'Vw16a', 'Vw16b', 'Vw17', 'Vw2', 'Vw3', 'Vw4', 'Vw5', 'Vw6', 'Vw9']
+  val  : 1 trips, 2 sessions, 105715 rows  ['M']
+  test : 6 trips, 9 sessions, 301757 rows  ['S1', 'S2', 'S3a', 'S3b', 'S3c', 'S4']
+  unassigned (excluded): ['Vfa01', 'Vta1a', 'Vta1b', 'Y1']
+
+=== window = 20 samples: {'train': 61055, 'val': 105676, 'test': 301580} ===
+
+--- CNN | window 20 (2 s) | 27233 parameters | receptive field 25 | device cuda ---
+    epoch   1 lr=1.00e-03 train_loss=5.9939 val MAE=7.978 RMSE=10.007 R2=-2.117 * (4.7s)
+    epoch   2 lr=2.00e-03 train_loss=4.1405 val MAE=8.328 RMSE=10.229 R2=-2.256 (4.0s)
+    epoch   3 lr=2.00e-03 train_loss=3.8549 val MAE=7.134 RMSE=8.902 R2=-1.466 * (3.6s)
+    epoch   4 lr=1.99e-03 train_loss=3.7574 val MAE=7.629 RMSE=9.522 R2=-1.822 (3.6s)
+    epoch   5 lr=1.99e-03 train_loss=3.6790 val MAE=7.945 RMSE=9.833 R2=-2.009 (3.8s)
+    epoch   6 lr=1.98e-03 train_loss=3.6259 val MAE=7.320 RMSE=9.183 R2=-1.624 (3.4s)
+    epoch   7 lr=1.96e-03 train_loss=3.5523 val MAE=7.133 RMSE=8.911 R2=-1.471 (3.7s)
+    epoch   8 lr=1.95e-03 train_loss=3.4948 val MAE=6.978 RMSE=8.781 R2=-1.400 * (3.9s)
+    epoch   9 lr=1.93e-03 train_loss=3.4477 val MAE=7.005 RMSE=8.801 R2=-1.410 (3.7s)
+    epoch  10 lr=1.91e-03 train_loss=3.4181 val MAE=6.914 RMSE=8.722 R2=-1.367 * (3.6s)
+    epoch  11 lr=1.89e-03 train_loss=3.3744 val MAE=7.073 RMSE=8.851 R2=-1.438 (3.4s)
+    epoch  12 lr=1.86e-03 train_loss=3.3481 val MAE=7.528 RMSE=9.393 R2=-1.746 (3.5s)
+    epoch  13 lr=1.83e-03 train_loss=3.2837 val MAE=7.072 RMSE=8.861 R2=-1.444 (3.8s)
+    epoch  14 lr=1.80e-03 train_loss=3.2502 val MAE=6.993 RMSE=8.816 R2=-1.419 (3.6s)
+    epoch  15 lr=1.77e-03 train_loss=3.2114 val MAE=7.347 RMSE=9.259 R2=-1.668 (4.2s)
+    epoch  16 lr=1.73e-03 train_loss=3.1904 val MAE=7.013 RMSE=8.791 R2=-1.405 (3.8s)
+    epoch  17 lr=1.69e-03 train_loss=3.1692 val MAE=7.187 RMSE=9.087 R2=-1.570 (4.0s)
+    epoch  18 lr=1.65e-03 train_loss=3.1454 val MAE=7.025 RMSE=8.863 R2=-1.444 (3.6s)
+    epoch  19 lr=1.61e-03 train_loss=3.1447 val MAE=6.860 RMSE=8.795 R2=-1.407 * (3.5s)
+    epoch  20 lr=1.57e-03 train_loss=3.1215 val MAE=6.883 RMSE=8.693 R2=-1.351 (3.7s)
+    epoch  21 lr=1.53e-03 train_loss=3.1144 val MAE=7.352 RMSE=9.206 R2=-1.637 (3.5s)
+    epoch  22 lr=1.48e-03 train_loss=3.0878 val MAE=6.689 RMSE=8.499 R2=-1.248 * (3.2s)
+    epoch  23 lr=1.43e-03 train_loss=3.0796 val MAE=7.223 RMSE=9.119 R2=-1.588 (3.5s)
+    epoch  24 lr=1.38e-03 train_loss=3.0741 val MAE=6.907 RMSE=8.690 R2=-1.350 (3.7s)
+    epoch  25 lr=1.33e-03 train_loss=3.0634 val MAE=6.863 RMSE=8.673 R2=-1.341 (3.6s)
+    epoch  26 lr=1.28e-03 train_loss=3.0567 val MAE=7.034 RMSE=8.896 R2=-1.463 (3.2s)
+    epoch  27 lr=1.23e-03 train_loss=3.0460 val MAE=7.209 RMSE=9.087 R2=-1.570 (3.3s)
+    epoch  28 lr=1.18e-03 train_loss=3.0411 val MAE=7.314 RMSE=9.258 R2=-1.667 (3.5s)
+    epoch  29 lr=1.13e-03 train_loss=3.0165 val MAE=6.874 RMSE=8.722 R2=-1.367 (3.5s)
+    epoch  30 lr=1.07e-03 train_loss=3.0124 val MAE=7.113 RMSE=9.046 R2=-1.546 (3.5s)
+    epoch  31 lr=1.02e-03 train_loss=3.0035 val MAE=6.775 RMSE=8.641 R2=-1.323 (3.4s)
+    epoch  32 lr=9.67e-04 train_loss=3.0056 val MAE=6.799 RMSE=8.656 R2=-1.331 (3.4s)
+    early stopping at epoch 32 (best val MAE 6.689)
+  cnn  w20 train n=  61055 MAE=3.378 m/s (12.16 km/h) RMSE=4.792 R2=0.720
+  cnn  w20 val   n= 105676 MAE=6.689 m/s (24.08 km/h) RMSE=8.499 R2=-1.248
+  cnn  w20 test  n= 301580 MAE=6.898 m/s (24.83 km/h) RMSE=9.191 R2=-1.003
+  best epoch 22/32, train time 117.3 s
+
+--- TCN | window 20 (2 s) | 22881 parameters | receptive field 61 | device cuda ---
+    epoch   1 lr=1.00e-03 train_loss=7.9535 val MAE=7.655 RMSE=9.426 R2=-1.765 * (4.0s)
+    epoch   2 lr=2.00e-03 train_loss=4.7905 val MAE=8.131 RMSE=10.001 R2=-2.113 (3.7s)
+    epoch   3 lr=2.00e-03 train_loss=4.0753 val MAE=7.774 RMSE=9.587 R2=-1.860 (4.1s)
+    epoch   4 lr=1.99e-03 train_loss=3.9143 val MAE=8.433 RMSE=10.233 R2=-2.259 (4.2s)
+    epoch   5 lr=1.99e-03 train_loss=3.8296 val MAE=8.057 RMSE=9.926 R2=-2.066 (4.1s)
+    epoch   6 lr=1.98e-03 train_loss=3.7871 val MAE=7.785 RMSE=9.641 R2=-1.893 (4.0s)
+    epoch   7 lr=1.96e-03 train_loss=3.7151 val MAE=7.406 RMSE=9.116 R2=-1.586 * (4.1s)
+    epoch   8 lr=1.95e-03 train_loss=3.6628 val MAE=7.485 RMSE=9.324 R2=-1.705 (4.4s)
+    epoch   9 lr=1.93e-03 train_loss=3.6176 val MAE=7.319 RMSE=9.146 R2=-1.603 * (4.3s)
+    epoch  10 lr=1.91e-03 train_loss=3.5668 val MAE=7.273 RMSE=9.125 R2=-1.591 * (4.2s)
+    epoch  11 lr=1.89e-03 train_loss=3.5386 val MAE=7.376 RMSE=9.218 R2=-1.644 (4.3s)
+    epoch  12 lr=1.86e-03 train_loss=3.5275 val MAE=7.105 RMSE=8.841 R2=-1.432 * (4.2s)
+    epoch  13 lr=1.83e-03 train_loss=3.4984 val MAE=7.158 RMSE=8.908 R2=-1.469 (4.0s)
+    epoch  14 lr=1.80e-03 train_loss=3.4778 val MAE=7.171 RMSE=8.979 R2=-1.509 (4.0s)
+    epoch  15 lr=1.77e-03 train_loss=3.4449 val MAE=7.385 RMSE=9.245 R2=-1.660 (4.3s)
+    epoch  16 lr=1.73e-03 train_loss=3.4456 val MAE=7.138 RMSE=8.904 R2=-1.467 (4.5s)
+    epoch  17 lr=1.69e-03 train_loss=3.4204 val MAE=7.367 RMSE=9.198 R2=-1.633 (4.3s)
+    epoch  18 lr=1.65e-03 train_loss=3.4074 val MAE=6.919 RMSE=8.663 R2=-1.336 * (4.1s)
+    epoch  19 lr=1.61e-03 train_loss=3.3817 val MAE=7.271 RMSE=9.079 R2=-1.565 (4.2s)
+    epoch  20 lr=1.57e-03 train_loss=3.3717 val MAE=7.252 RMSE=9.010 R2=-1.526 (4.0s)
+    epoch  21 lr=1.53e-03 train_loss=3.3714 val MAE=7.941 RMSE=9.812 R2=-1.996 (3.7s)
+    epoch  22 lr=1.48e-03 train_loss=3.3444 val MAE=7.079 RMSE=8.850 R2=-1.438 (3.9s)
+    epoch  23 lr=1.43e-03 train_loss=3.3369 val MAE=7.025 RMSE=8.844 R2=-1.434 (4.2s)
+    epoch  24 lr=1.38e-03 train_loss=3.3282 val MAE=7.514 RMSE=9.419 R2=-1.761 (4.0s)
+    epoch  25 lr=1.33e-03 train_loss=3.3123 val MAE=6.902 RMSE=8.630 R2=-1.318 * (4.2s)
+    epoch  26 lr=1.28e-03 train_loss=3.2958 val MAE=7.343 RMSE=9.112 R2=-1.584 (4.3s)
+    epoch  27 lr=1.23e-03 train_loss=3.3014 val MAE=7.477 RMSE=9.277 R2=-1.678 (4.1s)
+    epoch  28 lr=1.18e-03 train_loss=3.2891 val MAE=7.384 RMSE=9.244 R2=-1.659 (4.2s)
+    epoch  29 lr=1.13e-03 train_loss=3.2898 val MAE=7.318 RMSE=9.097 R2=-1.575 (4.0s)
+    epoch  30 lr=1.07e-03 train_loss=3.2771 val MAE=7.420 RMSE=9.308 R2=-1.696 (4.2s)
+    epoch  31 lr=1.02e-03 train_loss=3.2696 val MAE=7.313 RMSE=9.144 R2=-1.602 (4.2s)
+    epoch  32 lr=9.67e-04 train_loss=3.2550 val MAE=7.478 RMSE=9.331 R2=-1.709 (3.8s)
+    epoch  33 lr=9.14e-04 train_loss=3.2486 val MAE=7.311 RMSE=9.092 R2=-1.573 (4.2s)
+    epoch  34 lr=8.61e-04 train_loss=3.2361 val MAE=7.132 RMSE=8.956 R2=-1.496 (4.4s)
+    epoch  35 lr=8.09e-04 train_loss=3.2361 val MAE=7.014 RMSE=8.833 R2=-1.428 (4.4s)
+    early stopping at epoch 35 (best val MAE 6.902)
+  tcn  w20 train n=  61055 MAE=3.487 m/s (12.55 km/h) RMSE=4.890 R2=0.708
+  tcn  w20 val   n= 105676 MAE=6.902 m/s (24.85 km/h) RMSE=8.630 R2=-1.318
+  tcn  w20 test  n= 301580 MAE=7.546 m/s (27.17 km/h) RMSE=9.775 R2=-1.265
+  best epoch 25/35, train time 145.0 s
+
+=== window = 40 samples: {'train': 60987, 'val': 105636, 'test': 301400} ===
+
+--- CNN | window 40 (4 s) | 27233 parameters | receptive field 25 | device cuda ---
+    epoch   1 lr=1.00e-03 train_loss=5.5424 val MAE=7.829 RMSE=9.763 R2=-1.967 * (4.4s)
+    epoch   2 lr=2.00e-03 train_loss=3.8018 val MAE=6.824 RMSE=8.626 R2=-1.316 * (4.2s)
+    epoch   3 lr=2.00e-03 train_loss=3.5885 val MAE=6.673 RMSE=8.501 R2=-1.250 * (4.3s)
+    epoch   4 lr=1.99e-03 train_loss=3.4759 val MAE=6.096 RMSE=7.856 R2=-0.921 * (3.9s)
+    epoch   5 lr=1.99e-03 train_loss=3.3310 val MAE=5.739 RMSE=7.324 R2=-0.670 * (4.2s)
+    epoch   6 lr=1.98e-03 train_loss=3.2525 val MAE=6.609 RMSE=8.374 R2=-1.183 (4.5s)
+    epoch   7 lr=1.96e-03 train_loss=3.1698 val MAE=6.072 RMSE=7.726 R2=-0.858 (5.3s)
+    epoch   8 lr=1.95e-03 train_loss=3.1037 val MAE=6.203 RMSE=7.846 R2=-0.916 (4.1s)
+    epoch   9 lr=1.93e-03 train_loss=3.0670 val MAE=6.798 RMSE=8.644 R2=-1.326 (4.0s)
+    epoch  10 lr=1.91e-03 train_loss=3.0263 val MAE=6.361 RMSE=8.150 R2=-1.068 (3.9s)
+    epoch  11 lr=1.89e-03 train_loss=2.9856 val MAE=6.401 RMSE=8.246 R2=-1.117 (3.8s)
+    epoch  12 lr=1.86e-03 train_loss=2.9602 val MAE=6.100 RMSE=7.802 R2=-0.895 (4.1s)
+    epoch  13 lr=1.83e-03 train_loss=2.9343 val MAE=6.777 RMSE=8.629 R2=-1.318 (3.7s)
+    epoch  14 lr=1.80e-03 train_loss=2.8861 val MAE=6.021 RMSE=7.764 R2=-0.877 (3.5s)
+    epoch  15 lr=1.77e-03 train_loss=2.8819 val MAE=6.184 RMSE=7.890 R2=-0.938 (3.8s)
+    early stopping at epoch 15 (best val MAE 5.739)
+  cnn  w40 train n=  60987 MAE=3.692 m/s (13.29 km/h) RMSE=4.964 R2=0.699
+  cnn  w40 val   n= 105636 MAE=5.739 m/s (20.66 km/h) RMSE=7.324 R2=-0.670
+  cnn  w40 test  n= 301400 MAE=6.991 m/s (25.17 km/h) RMSE=8.974 R2=-0.909
+  best epoch 5/15, train time 61.9 s
+
+--- TCN | window 40 (4 s) | 22881 parameters | receptive field 61 | device cuda ---
+    epoch   1 lr=1.00e-03 train_loss=7.7260 val MAE=8.367 RMSE=10.283 R2=-2.291 * (4.5s)
+    epoch   2 lr=2.00e-03 train_loss=4.3327 val MAE=7.695 RMSE=9.671 R2=-1.911 * (4.3s)
+    epoch   3 lr=2.00e-03 train_loss=3.8389 val MAE=8.137 RMSE=10.007 R2=-2.117 (4.6s)
+    epoch   4 lr=1.99e-03 train_loss=3.6865 val MAE=7.676 RMSE=9.454 R2=-1.782 * (4.6s)
+    epoch   5 lr=1.99e-03 train_loss=3.5719 val MAE=6.667 RMSE=8.284 R2=-1.136 * (4.4s)
+    epoch   6 lr=1.98e-03 train_loss=3.4896 val MAE=7.339 RMSE=9.254 R2=-1.665 (4.2s)
+    epoch   7 lr=1.96e-03 train_loss=3.3986 val MAE=6.376 RMSE=8.005 R2=-0.995 * (4.9s)
+    epoch   8 lr=1.95e-03 train_loss=3.3304 val MAE=6.458 RMSE=8.176 R2=-1.081 (4.3s)
+    epoch   9 lr=1.93e-03 train_loss=3.2818 val MAE=6.783 RMSE=8.580 R2=-1.291 (4.6s)
+    epoch  10 lr=1.91e-03 train_loss=3.2347 val MAE=7.241 RMSE=9.095 R2=-1.575 (4.5s)
+    epoch  11 lr=1.89e-03 train_loss=3.2132 val MAE=6.553 RMSE=8.239 R2=-1.113 (4.5s)
+    epoch  12 lr=1.86e-03 train_loss=3.1806 val MAE=7.224 RMSE=9.009 R2=-1.527 (4.7s)
+    epoch  13 lr=1.83e-03 train_loss=3.1550 val MAE=6.503 RMSE=8.258 R2=-1.123 (4.6s)
+    epoch  14 lr=1.80e-03 train_loss=3.1099 val MAE=6.672 RMSE=8.507 R2=-1.253 (4.6s)
+    epoch  15 lr=1.77e-03 train_loss=3.1017 val MAE=6.462 RMSE=8.182 R2=-1.084 (4.3s)
+    epoch  16 lr=1.73e-03 train_loss=3.1012 val MAE=7.368 RMSE=9.287 R2=-1.685 (4.4s)
+    epoch  17 lr=1.69e-03 train_loss=3.0784 val MAE=6.814 RMSE=8.607 R2=-1.306 (4.5s)
+    early stopping at epoch 17 (best val MAE 6.376)
+  tcn  w40 train n=  60987 MAE=3.581 m/s (12.89 km/h) RMSE=4.997 R2=0.695
+  tcn  w40 val   n= 105636 MAE=6.376 m/s (22.95 km/h) RMSE=8.005 R2=-0.995
+  tcn  w40 test  n= 301400 MAE=6.468 m/s (23.28 km/h) RMSE=8.571 R2=-0.741
+  best epoch 7/17, train time 76.3 s
+
+Best neural model (by validation MAE): cnn_w40  val MAE=5.739  test MAE=6.991  checkpoint=experiments/m2_cnn_w40/best.pt
+Saved results to D:\sih26168\member1-ml\results\neural and runs to D:\sih26168\member1-ml\experiments
+exit=0
