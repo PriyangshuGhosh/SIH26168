@@ -28,21 +28,21 @@ Vehicle convention follows Member 2: +X forward, +Y left, +Z up. Accelerometer v
 
 Prediction uses bias-corrected aligned `ax_v`, `ay_v`, and `gz_v`. Vehicle-frame velocity is rotated into local North/East using yaw. Accelerometer and gyro biases are random-walk states and are included in the analytical covariance Jacobian.
 
-Each valid interval is integrated in bounded substeps of `max_prediction_dt_s`; intervals longer than `max_gap_s` are treated as data gaps rather than as one artificial motion step. Data gaps advance the estimator clock and inflate uncertainty.
+Each valid interval is integrated in bounded substeps of `max_prediction_dt_s`; intervals longer than `max_gap_s` are treated as data gaps rather than as one artificial motion step. Data gaps advance the estimator clock and conservatively inflate position, velocity, and yaw uncertainty.
 
-For Member 2 status other than `FULLY_ALIGNED`, process noise is inflated and the non-holonomic constraint is disabled. `INVALID` samples are ignored.
+The process covariance uses the standard continuous white-acceleration discretization, including position/velocity cross-covariance terms. For Member 2 status other than `FULLY_ALIGNED`, process noise is inflated and the non-holonomic constraint is disabled. `INVALID` samples are ignored.
 
 ## Measurement updates and gates
 
 - GNSS position is a 2-D local North/East measurement. The innovation covariance is `S = HPHᵀ + R`; a configurable Mahalanobis/NIS gate defaults to the 95% chi-square threshold 5.991.
-- GNSS speed and AI speed measure forward velocity `v_x` and use scalar NIS gating with default threshold 3.841.
+- GNSS speed and AI speed measure forward velocity `v_x` and use scalar NIS gating with default threshold 3.841. GNSS speed is independently usable even if the position innovation is rejected.
 - GNSS position uncertainty is estimated as `max(position_sigma_floor, HDOP × gnss_hdop_to_sigma_m)`. The conversion factor is explicitly configurable because HDOP is dimensionless and the current GNSS input contract does not expose receiver covariance.
 - NHC is the probabilistic measurement `v_y = 0`, applied only when Member 2 reports `FULLY_ALIGNED`.
 - Measurement updates use Joseph covariance form. GNSS position uses LDLT solves rather than explicit matrix inversion.
 
 ## Timestamp and invalid-input policy
 
-Duplicate/backward IMU timestamps are ignored. Measurements outside the configured age/lead window are rejected. Delayed measurements may update the filter when still inside that window, but they never rewind the externally visible navigation timestamp; there is intentionally no out-of-sequence replay.
+Duplicate/backward IMU timestamps are ignored. Because this implementation does not maintain an IMU history or perform fixed-lag replay, GNSS and AI measurements are expected to be time-aligned to the latest EKF epoch; the configurable age/lead window is intentionally small. Delayed measurements outside that window are rejected and never rewind the externally visible navigation timestamp.
 
 Non-finite and physically invalid IMU, GNSS, and AI inputs are ignored. Covariance is symmetrized after propagation/updates and checked for positive-semidefinite behavior; materially negative eigenvalues are projected back to a minimum variance floor.
 
@@ -75,7 +75,7 @@ Downstream code should include `member3/EKFFusionEngine.hpp` for the engine and 
 
 ## Known limitations
 
-1. No delayed-measurement replay or fixed-lag smoothing.
+1. No delayed-measurement replay or fixed-lag smoothing; callers should timestamp-align measurements before submitting them.
 2. Local tangent-plane conversion is intended for vehicle-scale trajectories.
 3. HDOP-to-metre conversion is a configurable approximation until receiver covariance is exposed.
 4. Altitude is held at the reference GNSS fix because vertical position is not part of the required 8-state model.
