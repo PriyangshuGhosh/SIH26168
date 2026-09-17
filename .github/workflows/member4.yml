@@ -1,0 +1,40 @@
+name: member4
+
+on:
+  push:
+    paths:
+      - "member4_map_matching/**"
+      - "member3_fusion/**"
+      - "member2_alignment/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member4.yml"
+  pull_request:
+    paths:
+      - "member4_map_matching/**"
+      - "member3_fusion/**"
+      - "member2_alignment/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member4.yml"
+
+jobs:
+  member4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python deps
+        run: |
+          python3 -m pip install -U pip
+          python3 -m pip install -r member4_map_matching/requirements.txt
+      - name: Build synthetic offline map
+        run: python3 member4_map_matching/python/tools/build_synthetic_graph.py
+      - name: Configure & build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j --target member4_cpp_tests member4_benchmark
+      - name: CTest Member 4
+        run: ctest --test-dir build -R member4 --output-on-failure
+      - name: Pytest Member 4
+        run: python3 -m pytest member4_map_matching/tests/python -q

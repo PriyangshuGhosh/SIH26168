@@ -1,0 +1,8 @@
+*.sqlite
+*.png
+small_road_network.roadpack
+!synthetic_grid.geojson
+!synthetic_grid.roadpack
+!small_road_network.graphml
+!README.md
+!.gitignore
