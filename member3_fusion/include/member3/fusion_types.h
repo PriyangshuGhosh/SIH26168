@@ -54,8 +54,10 @@ struct EKFFusionConfig {
     double speed_nis_threshold{3.841};
     double nhc_variance_m2s2{0.04};
     double nhc_nis_threshold{3.841};
-    double max_measurement_age_s{2.0};
-    double max_measurement_lead_s{0.10};
+    // Measurements are expected to be timestamp-aligned to the latest EKF epoch.
+    // The engine has no IMU history for out-of-sequence replay.
+    double max_measurement_age_s{0.10};
+    double max_measurement_lead_s{0.0};
     double max_prediction_dt_s{0.10};
     double max_gap_s{1.0};
     double accel_noise_std_mps2{0.5};
