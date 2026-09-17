@@ -64,7 +64,7 @@ class EKFReference:
                 t >= self.t - self.cfg.max_measurement_age_s)
 
     def _scalar(self, innovation, H, variance, threshold):
-        S = float(H @ self.P @ H.T + variance)
+        S = (H @ self.P @ H.T).item() + variance
         if not np.isfinite(S) or S <= 1e-9:
             return False
         nis = innovation * innovation / S
@@ -73,7 +73,7 @@ class EKFReference:
         K = self.P @ H.T / S
         A = np.eye(8) - K @ H
         self.x += K[:, 0] * innovation
-        self.P = A @ self.P @ A.T + K * variance @ K.T
+        self.P = A @ self.P @ A.T + (K * variance) @ K.T
         self.x[4] = self._yaw(self.x[4])
         return self._stabilize() and np.isfinite(self.x).all()
 
