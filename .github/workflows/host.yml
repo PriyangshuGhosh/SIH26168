@@ -1,0 +1,32 @@
+name: Host C++ and Python tests
+
+on:
+  push:
+    branches: [main, "integration/**", "fix/**", "feature/**"]
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python test deps
+        run: |
+          python -m pip install -q pytest numpy
+          python -m pip install -q -r member2_alignment/requirements.txt || true
+          python -m pip install -q -r member4_map_matching/requirements.txt || true
+          python -m pip install -q -r member1-ml/requirements.txt || true
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+      - name: Pytest Member 1/2/4
+        run: |
+          PYTHONPATH=member2_alignment/python python -m pytest member2_alignment/tests/python -q
+          PYTHONPATH=member4_map_matching/python python -m pytest member4_map_matching/tests/python -q
+          python -m pytest member1-ml/tests -q
