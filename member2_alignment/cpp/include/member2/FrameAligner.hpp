@@ -55,7 +55,8 @@ private:
     void updateGravity(const Eigen::Vector3d& acc, double t);
     void checkPhoneMoved(const Eigen::Vector3d& acc);
     void clearYaw();
-    bool gnssUsable(double t) const;
+    bool gnssQualityOk(double t) const;
+    bool gnssSignReady(double t, double a_h_n) const;
     void updateYaw(double t, const Eigen::Vector3d& acc_p, const Eigen::Vector3d& gyro_p, double dt);
     bool principalAxis(Eigen::Vector2d& axis_out) const;
     void maybeLockYaw(double t);

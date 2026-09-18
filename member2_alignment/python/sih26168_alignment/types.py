@@ -50,6 +50,12 @@ class FrameAlignerConfig:
     gnss_min_sats: int = 6
     gnss_max_age_s: float = 0.50
     gnss_min_accel: float = 0.35
+    gnss_min_speed_mps: float = 2.0
+    gnss_max_abs_accel: float = 6.0
+    gnss_imu_agree_rel: float = 0.16
+    gnss_imu_agree_abs: float = 0.35
+    gnss_sign_evidence_min: float = 0.80
+    yaw_disagree_rad: float = 0.60
 
     max_accel_norm: float = 80.0
     max_gyro_norm: float = 25.0

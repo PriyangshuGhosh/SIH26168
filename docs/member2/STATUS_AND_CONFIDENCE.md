@@ -36,11 +36,16 @@ Gaps / inconsistency → DEGRADED.
 
 Weights (must stay in sync with code):
 
-- `FULLY_ALIGNED`: `0.30 g + 0.45 yaw + 0.15 temporal + 0.10 sensor`
+- `FULLY_ALIGNED`: `0.30 g + 0.45 yaw + 0.15 temporal + 0.10 sensor`, and **status is
+  withheld unless `overall ≥ fully_aligned_min_confidence` (default 0.62)**.
 - `YAW_UNCERTAIN`: `min(0.55, 0.70 g + 0.10 yaw + 0.10 temporal + 0.10 sensor)`
 - `ROLL_PITCH_VALID` / `DEGRADED`: `min(0.50, 0.75 g + …)`
 - `UNINITIALIZED`: `overall = 0`
 - `INVALID` sample: `overall ≤ 0.05`
+
+Yaw is revoked to `YAW_UNCERTAIN` when evidence is stale (`> 2 · yaw_hold_s`) or a new
+signed axis disagrees by more than `yaw_disagree_rad`. Vehicle X is then **not** applied
+(`R_vp` falls back to tilt-only).
 
 **How Members 1/3/5 should use it**
 

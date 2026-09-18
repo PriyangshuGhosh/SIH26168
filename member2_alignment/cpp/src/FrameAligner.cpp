@@ -15,6 +15,33 @@ double clamp01(double x) {
     return std::min(1.0, std::max(0.0, x));
 }
 
+double wrapPi(double a) {
+    constexpr double kPi = 3.14159265358979323846;
+    while (a > kPi) {
+        a -= 2.0 * kPi;
+    }
+    while (a < -kPi) {
+        a += 2.0 * kPi;
+    }
+    return a;
+}
+
+int axisSign(double dot, double eps) {
+    if (std::abs(dot) <= eps) {
+        return 0;
+    }
+    return (dot > 0.0) ? 1 : -1;
+}
+
+bool accelMagnitudesAgree(double a_h_n, double gnss_abs, double rel, double abs_tol) {
+    const double hi = std::max(a_h_n, gnss_abs);
+    const double lo = std::min(a_h_n, gnss_abs);
+    if (hi < 1e-9) {
+        return false;
+    }
+    return (hi <= lo * (1.0 + rel)) && ((hi - lo) <= abs_tol);
+}
+
 void storeQuatWxyz(const Eigen::Quaterniond& q, std::array<double, 4>& out) {
     Eigen::Quaterniond n = q.normalized();
     if (n.w() < 0.0) {
@@ -128,7 +155,9 @@ void FrameAligner::feedGnss(const OptionalGnssAid& aid) {
         const double dt = aid.timestamp - gnss_t_prev_;
         if (dt >= 0.005 && dt <= 1.0) {
             const double raw = (aid.speed_mps - gnss_speed_prev_) / dt;
-            gnss_accel_ = 0.3 * raw + 0.7 * gnss_accel_;
+            if (std::isfinite(raw) && std::abs(raw) <= cfg_.gnss_max_abs_accel) {
+                gnss_accel_ = 0.3 * raw + 0.7 * gnss_accel_;
+            }
         }
     }
     gnss_speed_prev_ = aid.speed_mps;
@@ -254,12 +283,19 @@ bool FrameAligner::isQuasiStatic() const {
     double t_oldest = 0.0;
     double t_newest = 0.0;
     const int start = (hist_head_ - n + cap) % cap;
+    const double min_dot = g_initialized_ ? std::cos(cfg_.static_dir_align_rad) : 1.0;
     for (int i = 0; i < n; ++i) {
         const int idx = (start + i) % cap;
         const Eigen::Vector3d& a = acc_hist_[static_cast<std::size_t>(idx)];
         const Eigen::Vector3d& w = gyro_hist_[static_cast<std::size_t>(idx)];
         max_norm_err = std::max(max_norm_err, std::abs(a.norm() - g));
         max_gyro = std::max(max_gyro, w.norm());
+        if (g_initialized_) {
+            const Eigen::Vector3d an = safeNormalize(a);
+            if (an.norm() < 1e-9 || an.dot(g_up_p_) < min_dot) {
+                return false;
+            }
+        }
         ++count;
         const Eigen::Vector3d delta = a - mean;
         mean += delta / static_cast<double>(count);
@@ -279,16 +315,6 @@ bool FrameAligner::isQuasiStatic() const {
     const Eigen::Vector3d var = m2 / std::max(1.0, static_cast<double>(count));
     if (var.maxCoeff() > cfg_.static_accel_var_max) {
         return false;
-    }
-    if (g_initialized_) {
-        const Eigen::Vector3d mean_n = safeNormalize(mean);
-        if (mean_n.norm() < 1e-9) {
-            return false;
-        }
-        const double ang = std::acos(std::clamp(mean_n.dot(g_up_p_), -1.0, 1.0));
-        if (ang > cfg_.static_dir_align_rad) {
-            return false;
-        }
     }
     if (t_newest - t_oldest < 0.5 * cfg_.min_static_duration_s) {
         return false;
@@ -378,7 +404,7 @@ void FrameAligner::clearYaw() {
     have_last_yaw_update_ = false;
 }
 
-bool FrameAligner::gnssUsable(double t) const {
+bool FrameAligner::gnssQualityOk(double t) const {
     if (!have_gnss_) {
         return false;
     }
@@ -388,10 +414,24 @@ bool FrameAligner::gnssUsable(double t) const {
     if (gnss_.hdop > cfg_.gnss_max_hdop || gnss_.num_sats < cfg_.gnss_min_sats) {
         return false;
     }
-    if (gnss_.speed_mps < 0.0 || !std::isfinite(gnss_.speed_mps)) {
+    if (gnss_.speed_mps < 0.0 || !std::isfinite(gnss_.speed_mps) || !std::isfinite(gnss_.hdop)) {
         return false;
     }
     return true;
+}
+
+bool FrameAligner::gnssSignReady(double t, double a_h_n) const {
+    if (!gnssQualityOk(t)) {
+        return false;
+    }
+    if (gnss_.speed_mps < cfg_.gnss_min_speed_mps) {
+        return false;
+    }
+    const double mag = std::abs(gnss_accel_);
+    if (mag < cfg_.gnss_min_accel || mag > cfg_.gnss_max_abs_accel) {
+        return false;
+    }
+    return accelMagnitudesAgree(a_h_n, mag, cfg_.gnss_imu_agree_rel, cfg_.gnss_imu_agree_abs);
 }
 
 void FrameAligner::updateYaw(double t,
@@ -410,15 +450,20 @@ void FrameAligner::updateYaw(double t,
     }
     const bool straight = gyro_n < cfg_.yaw_max_gyro_norm;
     if (straight && a_h_n >= cfg_.yaw_min_horiz_accel) {
-        scatter_ += (a_h * a_h.transpose()) * dt;
-        axis_evidence_ += a_h_n * dt;
-        if (gnssUsable(t) && std::abs(gnss_accel_) >= cfg_.gnss_min_accel) {
-            const double sgn = (gnss_accel_ >= 0.0) ? 1.0 : -1.0;
-            signed_sum_ += sgn * a_h * dt;
-            gnss_sign_evidence_ += std::abs(gnss_accel_) * dt;
+        const bool gnss_watch = gnssQualityOk(t) && gnss_.speed_mps >= cfg_.gnss_min_speed_mps;
+        const bool gnss_sign_ok = gnssSignReady(t, a_h_n);
+        const bool skip_non_long = gnss_watch && !gnss_sign_ok;
+        if (!skip_non_long) {
+            scatter_ += (a_h * a_h.transpose()) * dt;
+            axis_evidence_ += a_h_n * dt;
+            if (gnss_sign_ok) {
+                const double sgn = (gnss_accel_ >= 0.0) ? 1.0 : -1.0;
+                signed_sum_ += sgn * a_h * dt;
+                gnss_sign_evidence_ += std::abs(gnss_accel_) * dt;
+            }
+            have_last_yaw_update_ = true;
+            last_yaw_update_t_ = t;
         }
-        have_last_yaw_update_ = true;
-        last_yaw_update_t_ = t;
     }
     Eigen::Vector2d axis;
     if (principalAxis(axis) && gyro_n >= cfg_.yaw_turn_gyro_min && a_h_n >= 0.25) {
@@ -459,26 +504,41 @@ void FrameAligner::maybeLockYaw(double t) {
     }
     have_yaw_axis_ = true;
     yaw_axis_ = axis;
-    double sign = 0.0;
     const double signed_n = signed_sum_.norm();
-    if (gnss_sign_evidence_ > 0.2 && signed_n > 1e-6) {
-        sign = (signed_sum_.dot(axis) >= 0.0) ? 1.0 : -1.0;
-    } else if (std::abs(turn_evidence_) >= cfg_.yaw_turn_evidence_min) {
-        sign = (turn_evidence_ >= 0.0) ? 1.0 : -1.0;
+    const int s_gnss = (gnss_sign_evidence_ >= cfg_.gnss_sign_evidence_min && signed_n > 1e-6)
+                           ? axisSign(signed_sum_.dot(axis), 1e-9)
+                           : 0;
+    const int s_turn = (std::abs(turn_evidence_) >= cfg_.yaw_turn_evidence_min)
+                           ? axisSign(turn_evidence_, 1e-12)
+                           : 0;
+    if (s_gnss != 0 && s_turn != 0 && s_gnss != s_turn) {
+        have_yaw_ = false;
+        yaw_conf_ = std::min(yaw_conf_, 0.25);
+        return;
     }
+    const double sign = static_cast<double>(s_gnss != 0 ? s_gnss : s_turn);
     if (sign == 0.0) {
         yaw_conf_ = clamp01(axis_evidence_ / (cfg_.yaw_min_evidence * 3.0));
         yaw_conf_ = std::min(yaw_conf_, 0.45);
         return;
     }
     const Eigen::Vector2d u = sign * axis;
-    yaw_ = -std::atan2(u.y(), u.x());
+    const double yaw_new = -std::atan2(u.y(), u.x());
+    if (have_yaw_) {
+        const double d = std::abs(wrapPi(yaw_new - yaw_));
+        if (d > cfg_.yaw_disagree_rad) {
+            have_yaw_ = false;
+            yaw_conf_ = std::min(yaw_conf_, 0.30);
+            return;
+        }
+    }
+    yaw_ = yaw_new;
     have_yaw_ = true;
     const double c_axis = std::min(1.0, axis_evidence_ / (cfg_.yaw_min_evidence * 2.5));
     const double c_turn = std::min(1.0, std::abs(turn_evidence_) / std::max(cfg_.yaw_turn_evidence_min * 2.0, 1e-6));
     const double c_gnss = std::min(1.0, gnss_sign_evidence_ / 1.5);
     yaw_conf_ = clamp01(0.35 * c_axis + 0.35 * c_turn + 0.30 * c_gnss);
-    if (gnss_sign_evidence_ < 0.2) {
+    if (gnss_sign_evidence_ < cfg_.gnss_sign_evidence_min) {
         yaw_conf_ = std::min(yaw_conf_, 0.85);
     }
     have_last_yaw_update_ = true;
@@ -498,25 +558,24 @@ void FrameAligner::refreshStatus(double t) {
     }
     bool yaw_stale = false;
     if (have_last_yaw_update_) {
-        yaw_stale = (t - last_yaw_update_t_) > cfg_.yaw_hold_s * 4.0;
+        yaw_stale = (t - last_yaw_update_t_) > cfg_.yaw_hold_s * 2.0;
+    }
+    if (have_yaw_ && yaw_stale) {
+        have_yaw_ = false;
+        yaw_conf_ = std::min(yaw_conf_, 0.30);
     }
     if (have_yaw_ && yaw_conf_ >= 0.35 && !yaw_stale) {
         status_ = CalibrationStatus::FULLY_ALIGNED;
+        const CalibrationConfidence conf = composeConfidence();
+        if (conf.overall < cfg_.fully_aligned_min_confidence) {
+            status_ = CalibrationStatus::YAW_UNCERTAIN;
+        }
     } else if (have_yaw_axis_) {
         status_ = CalibrationStatus::YAW_UNCERTAIN;
-    } else {
-        if (status_ == CalibrationStatus::REINITIALIZING) {
-            status_ = CalibrationStatus::ROLL_PITCH_VALID;
-        } else if (status_ != CalibrationStatus::DEGRADED && status_ != CalibrationStatus::FULLY_ALIGNED &&
-                   status_ != CalibrationStatus::YAW_UNCERTAIN) {
-            status_ = CalibrationStatus::ROLL_PITCH_VALID;
-        }
-    }
-    if (status_ == CalibrationStatus::FULLY_ALIGNED) {
-        const CalibrationConfidence conf = composeConfidence();
-        if (conf.overall < cfg_.fully_aligned_min_confidence * 0.5) {
-            status_ = CalibrationStatus::DEGRADED;
-        }
+    } else if (status_ == CalibrationStatus::REINITIALIZING) {
+        status_ = CalibrationStatus::ROLL_PITCH_VALID;
+    } else if (status_ != CalibrationStatus::DEGRADED) {
+        status_ = CalibrationStatus::ROLL_PITCH_VALID;
     }
 }
 

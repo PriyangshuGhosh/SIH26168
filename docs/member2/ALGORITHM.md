@@ -44,11 +44,13 @@ A window of `static_window_samples` (default 0.5 s at 100 Hz) is quasi-static on
 **all** hold:
 
 1. `||a| − g| < static_accel_norm_tol` for every sample (not `|a|≈g` on a single sample).
-   Longitudinal 1–2 m/s² still leaves `|a|` near `g`; a tight tolerance plus (4) is required.
+   Longitudinal 1–2 m/s² still leaves `|a|` near `g`; a tight tolerance plus (4)–(5) is required.
 2. `max |ω| < static_gyro_norm_max`.
 3. Per-axis acceleration variance `< static_accel_var_max`.
-4. If gravity is already known, the window-mean direction must lie within
-   `static_dir_align_rad` of `g_up_p` (rejects accel/braking masquerading as gravity).
+4. If gravity is already known, **every sample** in the window (not only the mean) must lie
+   within `static_dir_align_rad` of `g_up_p`. Mean-only gating allowed the first accel samples
+   to poison the gravity EMA; once `g_up_p` tracks specific force, later `|a|≈g` checks pass
+   and yaw evidence disappears.
 5. Window duration and a minimum static streak (`min_static_duration_s`).
 
 ## Gravity / roll / pitch
@@ -66,14 +68,52 @@ After levelling, `a_h = (R_gp a_p)_{xy}` is linear-ish horizontal specific force
 - approximately straight (`|ω| < yaw_max_gyro_norm`);
 - `|a_h| ≥ yaw_min_horiz_accel`.
 
-A 2×2 scatter matrix of `a_h` is accumulated. The principal eigenvector is the
-longitudinal **axis**. Sign:
+If quality GNSS is present **and** speed ≥ `gnss_min_speed_mps`, a sample is accumulated
+into the PCA scatter **only when** `|a_h|` and `|dv/dt|` agree (`max ≤ min · (1+rel)` **and**
+`max−min ≤ gnss_imu_agree_abs`), `|dv/dt|` is in `[gnss_min_accel, gnss_max_abs_accel]`,
+and the GNSS fix is fresh (HDOP/sats/age).
+A lateral lane-change pulse with a slow/unrelated speed ramp therefore does **not**
+build a “longitudinal” axis. Spiked `dv/dt` is ignored (not blended into the GNSS accel EMA).
 
-1. Optional GNSS: if HDOP/sats/age pass, `sign(dv/dt)` tags whether `a_h` is forward or brake.
-2. Else, if enough turn samples exist, `sign(ω_z) * a_lat` consistency (vehicle: `a_y ≈ ω_z v_x` with `v_x≥0`).
-3. Else: **do not guess**. Status `YAW_UNCERTAIN`. Output uses tilt-only `R_gp`.
+A 2×2 scatter matrix of accepted `a_h` is accumulated. The principal eigenvector is the
+candidate longitudinal **axis**, not a direction. It is rejected unless the eigenvalue
+ratio `λ_max/λ_min ≥ yaw_pca_ratio_min` (default 2.2). Equal-ish eigenvalues mean the
+horizontal force is not directional (turns + accel, lane change + throttle, vibration):
+status stays `YAW_UNCERTAIN`. Eigenvector sign is arbitrary; ±180° is resolved separately.
+
+Sign:
+
+1. Optional GNSS: if GNSS–IMU magnitudes agree as above, `sign(dv/dt)` tags whether `a_h`
+   is forward or brake. Evidence integral must reach `gnss_sign_evidence_min`.
+2. Else, if enough turn samples exist, `sign(ω_z) * a_lat` consistency (vehicle:
+   `a_y ≈ ω_z v_x` with **`v_x≥0` assumed**).
+3. If **both** GNSS and turn signs are available and they **disagree**, yaw is revoked
+   (`YAW_UNCERTAIN`). Reverse + unsigned GNSS speed is the usual cause.
+4. Else: **do not guess**. Status `YAW_UNCERTAIN`. Output uses tilt-only `R_gp`.
 
 When yaw is locked: `R_vp = R_z(ψ) R_gp` with `ψ = −atan2(u_y, u_x)` for signed axis `u`.
+If a later lock disagrees by more than `yaw_disagree_rad`, yaw is revoked.
+Yaw older than `2 · yaw_hold_s` without new evidence is revoked (`YAW_UNCERTAIN`).
+
+`FULLY_ALIGNED` is emitted only if signed yaw is locked **and** `overall ≥ fully_aligned_min_confidence`
+(default 0.62). Low overall never advertises a usable chassis X.
+
+### Known limitations (not silently “solved”)
+
+- GNSS `dv/dt` cannot see lateral vs longitudinal. A **matched-magnitude** speed-up coinciding
+  with a nearly straight lateral-only IMU pulse can still look like forward accel. Honest
+  GNSS + simultaneous lateral and longitudinal of similar size usually fails the PCA ratio
+  gate (near-equal eigenvalues) and stays uncertain.
+- Systematically inverted GNSS speed (always decreasing while the car accelerates) can still
+  produce a **180°** sign error if magnitudes agree. Course is accepted on the wire but **not**
+  used (hostile in urban canyons).
+- Reverse (`v_x < 0`) is **not observable** vs a 180° mount when GNSS speed is unsigned:
+  reverse accel increases speed and the turn identity `a_y ≈ ω_z v_x` with `v_x≥0` **confirms
+  the wrong sign**. Do not treat `FULLY_ALIGNED` during reverse as trustworthy. Signed velocity
+  or a known-forward interval is required to fix this; Member 2 does not invent it.
+- Phone rotated during strong motion may not look like `|a|≈g` remount; yaw can go stale
+  rather than instantly `REINITIALIZING`.
+- Android runtime is **NOT VALIDATED**.
 
 ## Online processing
 
