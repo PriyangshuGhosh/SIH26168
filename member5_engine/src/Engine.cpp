@@ -430,8 +430,8 @@ void Engine::handleImu(const ImuSample& s) {
     noteImuRate(s.timestamp);
 
     const float ch[kChannels] = {
-        static_cast<float>(aligned.ax_v), static_cast<float>(aligned.ay_v),
-        static_cast<float>(aligned.az_v), static_cast<float>(aligned.gx_v),
+        static_cast<float>(aligned.ax_v / 9.80665f), static_cast<float>(aligned.ay_v / 9.80665f),
+        static_cast<float>(aligned.az_v / 9.80665f), static_cast<float>(aligned.gx_v),
         static_cast<float>(aligned.gy_v), static_cast<float>(aligned.gz_v)};
 
     ++stride_count_;
@@ -439,8 +439,14 @@ void Engine::handleImu(const ImuSample& s) {
     if (speed_ && window_count_ >= model_T_ && stride_count_ >= kStride) {
         stride_count_ = 0;
         const int src0 = window_count_ - model_T_;
-        const SpeedEstimate est =
+        SpeedEstimate est =
             speed_->predict(window_.data() + src0 * kChannels, model_T_);
+        
+        if (aligned.status == sih26168::member2::CalibrationStatus::STATIC_DETECTED) {
+            est.velocity_mps = 0.0f;
+            est.valid = true;
+        }
+
         if (est.valid) {
             last_ai_speed_ = static_cast<double>(est.velocity_mps);
             SpeedRejectReason why = SpeedRejectReason::None;
