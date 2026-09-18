@@ -34,7 +34,7 @@ fun StatusPanel(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            MetricCard(label = "SPEED", value = "%.1f km/h".format(state.speedKmh))
+            MetricCard(label = "SPEED", value = state.speedLabel)
             MetricCard(label = "HEADING", value = "%.1f°".format(state.headingDeg))
         }
 
