@@ -63,6 +63,17 @@ public:
         return std::isfinite(hdop) && hdop <= cfg.max_hdop && num_sats >= cfg.min_sats;
     }
 
+    /* 3 = healthy, 2 = usable but weak, 0 = not usable. */
+    static int qualityBand(double hdop, int num_sats, const GnssDeficitConfig& cfg = GnssDeficitConfig{}) {
+        if (!std::isfinite(hdop) || num_sats < cfg.min_sats || hdop > cfg.max_hdop) {
+            return 0;
+        }
+        if (hdop <= 2.5 && num_sats >= 6) {
+            return 3;
+        }
+        return 2;
+    }
+
 private:
     sih26168::member3::NavigationMode store(sih26168::member3::NavigationMode m) {
         mode_.store(static_cast<int>(m), std::memory_order_release);

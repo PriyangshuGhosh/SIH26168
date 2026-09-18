@@ -24,30 +24,33 @@ SpeedEstimate MockSpeedEstimator::predict(const float* samples_t6, int n_samples
     if (samples_t6 == nullptr || n_samples <= 0) {
         return out;
     }
-    double sum_ax = 0.0;
-    double tail_ax = 0.0;
+    double tail_ax_g = 0.0;
     double sum_gyro = 0.0;
     const int tail = std::min(n_samples, 5);
     for (int i = 0; i < n_samples; ++i) {
-        const double ax = static_cast<double>(samples_t6[i * 6 + 0]);
-        sum_ax += ax;
+        const double ax_g = static_cast<double>(samples_t6[i * 6 + 0]);
         sum_gyro += std::abs(static_cast<double>(samples_t6[i * 6 + 5]));
         if (i >= n_samples - tail) {
-            tail_ax += ax;
+            tail_ax_g += ax_g;
         }
     }
+    constexpr double kG = 9.80665;
     constexpr double kInferDt = 0.10; /* engine stride 10 at 100 Hz */
-    const double mean_ax = sum_ax / n_samples;
     const double mean_gyro = sum_gyro / n_samples;
-    if (std::abs(mean_ax) < 0.35 && mean_gyro < 0.15) {
-        v_mps_ = 0.0f;
-        have_v_ = true;
+    const double ax_tail_mps2 = (tail_ax_g / static_cast<double>(tail)) * kG;
+    /* ~0.8 m/s²: separates standstill/cruise coast from meaningful accel/brake. */
+    const bool quasi_static = std::abs(ax_tail_mps2) < 0.8 && mean_gyro < 0.15;
+    if (quasi_static) {
+        if (!have_v_) {
+            v_mps_ = 0.0f;
+            have_v_ = true;
+        }
     } else if (!have_v_) {
-        v_mps_ = static_cast<float>(std::max(0.0, mean_ax * kInferDt));
+        v_mps_ = static_cast<float>(std::max(0.0, ax_tail_mps2 * kInferDt));
         have_v_ = true;
     } else {
-        const double ax_tail = tail_ax / static_cast<double>(tail);
-        v_mps_ = static_cast<float>(std::max(0.0, static_cast<double>(v_mps_) + ax_tail * kInferDt));
+        v_mps_ = static_cast<float>(
+            std::max(0.0, static_cast<double>(v_mps_) + ax_tail_mps2 * kInferDt));
     }
     out.velocity_mps = v_mps_;
     out.variance_m2s2 = 0.05f;

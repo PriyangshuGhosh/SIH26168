@@ -462,6 +462,13 @@ int test_e2e_speed_spike_and_gnss_outage_map() {
     idr_feed_gnss(dr.timestamp + 0.05, 12.9717, 77.5946, 920.0, 5.0, 0.9, 10);
     wait_for([] { return idr_get_current_state().is_dead_reckoning == 0; }, 1500);
     CHECK(idr_get_current_state().is_dead_reckoning == 0);
+
+    const double t_ai = idr_get_current_state().timestamp;
+    CHECK(idr_debug_inject_ai_speed(t_ai, 194.4, 0.05) == 0);
+    CHECK(idr_get_diagnostics().last_ai_speed_accepted == 0);
+    CHECK(idr_get_current_state().speed_m_s <= 55.0 + 1e-6);
+    CHECK(idr_engine_is_simulation() == 1);
+
     idr_engine_shutdown();
     return 0;
 }

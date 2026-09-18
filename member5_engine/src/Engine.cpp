@@ -92,6 +92,11 @@ bool Engine::start(const char* map_db_path, const char* onnx_model_path) {
     using_mock_speed_ = false;
     backend_name_ = "none";
     catalog_mode_ = false;
+    simulation_ = false;
+    gnss_quality_ = 0;
+    prev_dead_reckoning_ = 1;
+    last_hdop_ = 99.0;
+    last_num_sats_ = 0;
     speed_guard_ = SpeedValidityFilter(speed_cfg_);
     ai_guard_ = SpeedValidityFilter(speed_cfg_);
     active_region_id_.clear();
@@ -200,6 +205,7 @@ bool Engine::loadSpeed(const char* onnx_model_path) {
         speed_->load(onnx_model_path ? onnx_model_path : "");
         backend_name_ = speed_->backendName();
         model_T_ = speed_->requiredWindowSamples();
+        simulation_ = true;
         return true;
     }
 
@@ -259,6 +265,8 @@ bool Engine::feedGnss(const GnssSample& s) {
     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
     last_gnss_speed_ = s.speed;
     last_gnss_t_ = s.timestamp;
+    last_hdop_ = s.hdop;
+    last_num_sats_ = s.num_sats;
     {
         std::lock_guard<std::mutex> lock(state_mu_);
         output_.timestamp = s.timestamp;
@@ -306,7 +314,7 @@ const char* Engine::activeMapRegionId() const { return active_region_id_.c_str()
 const char* Engine::mapStatusMessage() const { return map_status_.c_str(); }
 
 int Engine::mapCoversLocation(double lat, double lon) const {
-    std::lock_guard<std::mutex> lock(state_mu_);
+    std::lock_guard<std::mutex> maplock(map_mu_);
     if (matcher_.hasMap() && matcher_.coversLocation(lat, lon)) {
         return 1;
     }
@@ -314,36 +322,69 @@ int Engine::mapCoversLocation(double lat, double lon) const {
 }
 
 int Engine::selectMapForLocation(double lat, double lon) {
-    /* Not on the 100 Hz IMU callback. GNSS/UI thread only. */
-    std::lock_guard<std::mutex> lock(state_mu_);
+    /* Not on the 100 Hz IMU callback. GNSS/UI/worker GNSS path only. */
     if (!std::isfinite(lat) || !std::isfinite(lon)) {
+        std::lock_guard<std::mutex> lock(state_mu_);
         map_coverage_ = MapCoverage::Unknown;
         map_status_ = "MAP DATA NOT AVAILABLE";
         return 0;
     }
-    if (matcher_.hasMap() && matcher_.coversLocation(lat, lon)) {
-        map_coverage_ = MapCoverage::InRegion;
-        map_status_ = "in_region";
-        if (active_region_id_.empty()) {
-            active_region_id_ = "provisioned";
+
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        if (matcher_.hasMap() && matcher_.coversLocation(lat, lon)) {
+            std::lock_guard<std::mutex> lock(state_mu_);
+            map_coverage_ = MapCoverage::InRegion;
+            map_status_ = "in_region";
+            if (active_region_id_.empty()) {
+                active_region_id_ = "provisioned";
+            }
+            return 1;
         }
-        return 1;
     }
-    const MapRegion* r = catalog_.findCovering(lat, lon);
-    if (r == nullptr) {
-        map_coverage_ =
-            catalog_.regions().empty() ? MapCoverage::NoPackage : MapCoverage::OutOfRegion;
-        map_status_ = "MAP DATA NOT AVAILABLE";
-        return 0;
-    }
-    if (!(active_region_id_ == r->id && matcher_.hasMap())) {
-        if (!applyRoadpack(r->roadpack_path)) {
-            map_coverage_ = MapCoverage::NoPackage;
+
+    std::string load_path;
+    std::string load_id;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        const MapRegion* r = catalog_.findCovering(lat, lon);
+        if (r == nullptr) {
+            std::lock_guard<std::mutex> lock(state_mu_);
+            map_coverage_ =
+                catalog_.regions().empty() ? MapCoverage::NoPackage : MapCoverage::OutOfRegion;
             map_status_ = "MAP DATA NOT AVAILABLE";
             return 0;
         }
-        active_region_id_ = r->id;
+        load_id = r->id;
+        load_path = r->roadpack_path;
     }
+
+    std::string already;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        std::lock_guard<std::mutex> lock(state_mu_);
+        already = active_region_id_;
+        if (already == load_id && matcher_.hasMap()) {
+            if (matcher_.coversLocation(lat, lon)) {
+                map_coverage_ = MapCoverage::InRegion;
+                map_status_ = "in_region";
+                return 1;
+            }
+            map_coverage_ = MapCoverage::OutOfRegion;
+            map_status_ = "MAP DATA NOT AVAILABLE";
+            return 0;
+        }
+    }
+
+    std::lock_guard<std::mutex> maplock(map_mu_);
+    if (!applyRoadpack(load_path)) {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        map_coverage_ = MapCoverage::NoPackage;
+        map_status_ = "MAP DATA NOT AVAILABLE";
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(state_mu_);
+    active_region_id_ = load_id;
     if (!matcher_.coversLocation(lat, lon)) {
         map_coverage_ = MapCoverage::OutOfRegion;
         map_status_ = "MAP DATA NOT AVAILABLE";
@@ -352,6 +393,42 @@ int Engine::selectMapForLocation(double lat, double lon) {
     map_coverage_ = MapCoverage::InRegion;
     map_status_ = "in_region";
     return 1;
+}
+
+void Engine::setSimulation(bool enabled) { simulation_ = enabled; }
+
+bool Engine::isSimulation() const { return simulation_ || using_mock_speed_; }
+
+int Engine::debugInjectAiSpeed(double timestamp, double velocity_mps, double variance_m2s2) {
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    last_ai_speed_ = velocity_mps;
+    SpeedRejectReason why = SpeedRejectReason::None;
+    if (!ai_guard_.acceptAiMeasurement(timestamp, velocity_mps, variance_m2s2, &why)) {
+        last_ai_accepted_ = 0;
+        speed_reject_ = speedRejectReasonCString(why);
+        skip_ai_until_t_ = timestamp + 0.25;
+        imu_q_.clear();
+        publishFromFusionState();
+        return 0;
+    }
+    sih26168::member3::AiSpeedMeasurement meas;
+    meas.timestamp = timestamp;
+    meas.velocity_mps = velocity_mps;
+    meas.variance_m2s2 = variance_m2s2;
+    meas.valid = true;
+    fusion_.updateAiSpeed(meas);
+    last_ai_accepted_ = fusion_.state().last_ai_speed_accepted ? 1 : 0;
+    if (!fusion_.state().last_ai_speed_accepted) {
+        speed_reject_ = "ekf_innovation_rejected";
+    }
+    skip_ai_until_t_ = timestamp + 0.25;
+    imu_q_.clear();
+    publishFromFusionState();
+    return last_ai_accepted_;
+}
+
+void Engine::maybeSelectMapFromGnss(double lat, double lon) {
+    (void)selectMapForLocation(lat, lon);
 }
 
 IDRDiagnostics Engine::diagnostics() const {
@@ -402,19 +479,25 @@ void Engine::handleGnss(const GnssSample& s) {
     aid.num_sats = s.num_sats;
     aligner_.feedGnss(aid);
 
+    last_hdop_ = s.hdop;
+    last_num_sats_ = s.num_sats;
+    maybeSelectMapFromGnss(s.lat, s.lon);
     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
-    if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
-        sih26168::member3::GnssMeasurement g;
-        g.timestamp = s.timestamp;
-        g.latitude = s.lat;
-        g.longitude = s.lon;
-        g.altitude = s.alt;
-        g.speed_mps = s.speed;
-        g.hdop = s.hdop;
-        g.num_sats = s.num_sats;
-        fusion_.updateGnss(g);
+    {
+        std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+        if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
+            sih26168::member3::GnssMeasurement g;
+            g.timestamp = s.timestamp;
+            g.latitude = s.lat;
+            g.longitude = s.lon;
+            g.altitude = s.alt;
+            g.speed_mps = s.speed;
+            g.hdop = s.hdop;
+            g.num_sats = s.num_sats;
+            fusion_.updateGnss(g);
+        }
+        publishFromFusionState();
     }
-    publishLocked();
 }
 
 void Engine::handleImu(const ImuSample& s) {
@@ -423,8 +506,6 @@ void Engine::handleImu(const ImuSample& s) {
         return;
     }
 
-    const auto mode = deficit_.evaluate(s.timestamp);
-    fusion_.predict(aligned, mode);
     last_cal_status_ = static_cast<int>(aligned.status);
     last_imu_t_ = s.timestamp;
     noteImuRate(s.timestamp);
@@ -436,41 +517,47 @@ void Engine::handleImu(const ImuSample& s) {
 
     ++stride_count_;
     pushAlignedSample(ch);
+
+    SpeedEstimate est{};
+    bool run_ai = false;
     if (speed_ && window_count_ >= model_T_ && stride_count_ >= kStride) {
         stride_count_ = 0;
-        const int src0 = window_count_ - model_T_;
-        SpeedEstimate est =
-            speed_->predict(window_.data() + src0 * kChannels, model_T_);
-        
-        if (aligned.status == sih26168::member2::CalibrationStatus::STATIC_DETECTED) {
+        est = speed_->predict(window_.data() + (window_count_ - model_T_) * kChannels, model_T_);
+        if (aligned.status == sih26168::member2::CalibrationStatus::STATIC_DETECTED &&
+            (!speed_guard_.haveTrusted() || speed_guard_.lastTrustedMps() < 1.0)) {
             est.velocity_mps = 0.0f;
             est.valid = true;
         }
+        run_ai = est.valid && s.timestamp > skip_ai_until_t_;
+    }
 
-        if (est.valid) {
-            last_ai_speed_ = static_cast<double>(est.velocity_mps);
-            SpeedRejectReason why = SpeedRejectReason::None;
-            const double var = std::max(static_cast<double>(est.variance_m2s2),
-                                        speed_cfg_.min_speed_variance_m2s2);
-            if (ai_guard_.acceptAiMeasurement(s.timestamp, last_ai_speed_, var, &why)) {
-                sih26168::member3::AiSpeedMeasurement meas;
-                meas.timestamp = s.timestamp;
-                meas.velocity_mps = last_ai_speed_;
-                meas.variance_m2s2 = var;
-                meas.valid = true;
-                fusion_.updateAiSpeed(meas);
-                last_ai_accepted_ = fusion_.state().last_ai_speed_accepted ? 1 : 0;
-                if (!fusion_.state().last_ai_speed_accepted) {
-                    speed_reject_ = "ekf_innovation_rejected";
-                }
-            } else {
-                last_ai_accepted_ = 0;
-                speed_reject_ = speedRejectReasonCString(why);
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    const auto mode = deficit_.evaluate(s.timestamp);
+    fusion_.predict(aligned, mode);
+
+    if (run_ai) {
+        last_ai_speed_ = static_cast<double>(est.velocity_mps);
+        SpeedRejectReason why = SpeedRejectReason::None;
+        const double var = std::max(static_cast<double>(est.variance_m2s2),
+                                    speed_cfg_.min_speed_variance_m2s2);
+        if (ai_guard_.acceptAiMeasurement(s.timestamp, last_ai_speed_, var, &why)) {
+            sih26168::member3::AiSpeedMeasurement meas;
+            meas.timestamp = s.timestamp;
+            meas.velocity_mps = last_ai_speed_;
+            meas.variance_m2s2 = var;
+            meas.valid = true;
+            fusion_.updateAiSpeed(meas);
+            last_ai_accepted_ = fusion_.state().last_ai_speed_accepted ? 1 : 0;
+            if (!fusion_.state().last_ai_speed_accepted) {
+                speed_reject_ = "ekf_innovation_rejected";
             }
+        } else {
+            last_ai_accepted_ = 0;
+            speed_reject_ = speedRejectReasonCString(why);
         }
     }
 
-    publishLocked();
+    publishFromFusionState();
 }
 
 void Engine::pushAlignedSample(const float* ch6) {
@@ -485,8 +572,27 @@ void Engine::pushAlignedSample(const float* ch6) {
 }
 
 void Engine::publishLocked() {
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    publishFromFusionState();
+}
+
+void Engine::publishFromFusionState() {
     const auto& nav = fusion_.state();
-    const auto match = matcher_.match(nav);
+    sih26168::member4::MapMatchedPosition match;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        if (matcher_.hasMap() && matcher_.coversLocation(nav.latitude, nav.longitude)) {
+            match = matcher_.match(nav);
+        } else {
+            match.timestamp = nav.timestamp;
+            match.lat_snapped = nav.latitude;
+            match.lon_snapped = nav.longitude;
+            match.heading_snapped_rad = nav.yaw_rad;
+            match.confidence_score = 0.0;
+            match.is_on_road_network = false;
+            match.road_segment_id = 0;
+        }
+    }
     const auto mode = nav.mode;
     const double ekf_speed = hypotSpeed(nav.v_x, nav.v_y);
     last_ekf_speed_ = ekf_speed;
@@ -543,6 +649,21 @@ void Engine::publishLocked() {
     d.imu_hz = imu_hz_;
     d.last_imu_timestamp = last_imu_t_;
     d.last_gnss_timestamp = last_gnss_t_;
+    const int band = GnssDeficitMachine::qualityBand(last_hdop_, last_num_sats_);
+    int gq = 1; /* outage */
+    if (mode != sih26168::member3::NavigationMode::DEAD_RECKONING) {
+        if (prev_dead_reckoning_ != 0) {
+            gq = 4; /* recovering */
+        } else if (band == 2) {
+            gq = 2;
+        } else {
+            gq = 3;
+        }
+    }
+    prev_dead_reckoning_ = out.is_dead_reckoning;
+    gnss_quality_ = gq;
+    d.gnss_quality = gq;
+    d.simulation = (simulation_ || using_mock_speed_) ? 1 : 0;
 
     std::lock_guard<std::mutex> lock(state_mu_);
     output_ = out;

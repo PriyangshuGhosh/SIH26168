@@ -1,0 +1,18 @@
+{
+  "comment": "Documented safety thresholds. C++ defaults match these values. Reasons are not physical laws.",
+  "max_vehicle_speed_mps": 55.0,
+  "max_vehicle_speed_reason": "Passenger-road demo envelope (~198 km/h). Rejects 194.4 m/s (~700 km/h) AI/GNSS spikes.",
+  "max_speed_change_mps_per_second": 12.0,
+  "max_speed_change_reason": "~1.2 g longitudinal envelope for emergency accel/brake using actual dt.",
+  "min_speed_variance_m2s2": 0.04,
+  "max_speed_variance_m2s2": 2500.0,
+  "variance_reason": "Zero/NaN/tiny variance would over-trust a bad AI measurement; huge variance is still used but weakly.",
+  "map_search_radius_m": 120.0,
+  "map_search_radius_reason": "HMM candidates farther than this are never considered; prevents city-scale snap.",
+  "gnss_timeout_s": 1.2,
+  "gnss_max_hdop": 4.0,
+  "gnss_min_sats": 4,
+  "sensor_timeout_s": 1.0,
+  "ai_prediction_stride_samples": 10,
+  "ai_window_samples_100hz": 200
+}
