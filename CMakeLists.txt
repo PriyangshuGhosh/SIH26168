@@ -14,6 +14,9 @@ if(SIH26168_BUILD_MEMBER2)
   add_subdirectory(member2_alignment)
 endif()
 
+if(NOT SIH26168_BUILD_MEMBER2)
+  message(FATAL_ERROR "Member 3 requires Member 2 (set SIH26168_BUILD_MEMBER2=ON)")
+endif()
 add_subdirectory(member3_fusion)
 
 option(SIH26168_BUILD_MEMBER4 "Build Member 4 offline map matching" ON)
