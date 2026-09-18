@@ -27,6 +27,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Pytest Member 1/2/4
         run: |
-          PYTHONPATH=member2_alignment/python python -m pytest member2_alignment/tests/python -q
+          MEMBER2_CSV_ALIGNER=build/member2_alignment/member2_csv_aligner \
+            PYTHONPATH=member2_alignment/python python -m pytest member2_alignment/tests/python -q
           PYTHONPATH=member4_map_matching/python python -m pytest member4_map_matching/tests/python -q
           python -m pytest member1-ml/tests -q
