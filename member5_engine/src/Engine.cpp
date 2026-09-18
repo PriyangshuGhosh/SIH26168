@@ -290,7 +290,7 @@ void Engine::handleImu(const ImuSample& s) {
 
     ++stride_count_;
     pushAlignedSample(ch);
-    if (stride_count_ >= model_S_ && window_count_ >= model_T_) {
+    if (speed_ && window_count_ >= model_T_ && stride_count_ >= kStride) {
         stride_count_ = 0;
         const int src0 = window_count_ - model_T_;
         SpeedEstimate est =
