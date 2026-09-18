@@ -504,7 +504,7 @@ MapMatchedPosition MapMatchingEngine::toOutput(
 }
 
 MapMatchedPosition MapMatchingEngine::match(const member3::NavigationState& nav) {
-    if (segments_.empty()) {
+    if (segments_.empty() || !coversLocation(nav.latitude, nav.longitude)) {
         MapMatchedPosition m;
         m.timestamp = nav.timestamp;
         m.lat_snapped = nav.latitude;
