@@ -49,6 +49,10 @@ else()
   target_compile_options(member2_alignment PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(NOT DEFINED SIH26168_BUILD_HOST_TOOLS)
+  set(SIH26168_BUILD_HOST_TOOLS ON)
+endif()
+if(SIH26168_BUILD_HOST_TOOLS)
 add_executable(member2_csv_aligner cpp/tools/csv_aligner.cpp)
 target_link_libraries(member2_csv_aligner PRIVATE member2_alignment)
 
@@ -71,4 +75,5 @@ if(Python3_Interpreter_FOUND)
   set_tests_properties(member2_python_tests PROPERTIES
     ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/python"
   )
+endif()
 endif()

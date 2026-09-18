@@ -20,6 +20,10 @@ else()
   target_compile_options(member3_fusion PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(NOT DEFINED SIH26168_BUILD_HOST_TOOLS)
+  set(SIH26168_BUILD_HOST_TOOLS ON)
+endif()
+if(SIH26168_BUILD_HOST_TOOLS)
 add_executable(member3_cpp_tests tests/test_member3.cpp)
 target_link_libraries(member3_cpp_tests PRIVATE sih26168::member3)
 # The repository CI uses a Release build, which defines NDEBUG.  Member 3's
@@ -43,3 +47,4 @@ endif()
 
 add_executable(member3_benchmark tools/benchmark.cpp)
 target_link_libraries(member3_benchmark PRIVATE sih26168::member3)
+endif()
