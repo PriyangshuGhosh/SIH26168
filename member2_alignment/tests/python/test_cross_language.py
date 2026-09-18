@@ -60,6 +60,7 @@ def _find_csv_aligner() -> Path | None:
         ROOT / "build" / "member2_alignment" / "member2_csv_aligner",
         ROOT / "build" / "member2_csv_aligner",
         ROOT / "build-reconcile" / "member2_alignment" / "member2_csv_aligner",
+        ROOT / "build-audit" / "member2_alignment" / "member2_csv_aligner",
         ROOT / "build-ort" / "member2_alignment" / "member2_csv_aligner",
     ]
     found = [c for c in candidates if c.exists()]
