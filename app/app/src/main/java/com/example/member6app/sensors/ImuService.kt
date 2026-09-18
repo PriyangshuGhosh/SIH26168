@@ -72,55 +72,49 @@ class ImuService(context: Context) : SensorEventListener {
         Log.i(TAG, "IMU stopped – measured rate: %.1f Hz, dropped: %d".format(_measuredHz.value, droppedEvents))
     }
 
-    override fun onSensorChanged(event: SensorEvent) {
-        val ts = nsToSeconds(event.timestamp) // boot-clock seconds
+    private val pairer = ImuSamplePairer()
 
-        when (event.sensor.type) {
+    override fun onSensorChanged(event: SensorEvent) {
+        val sample = when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                // Guard against timestamp regression
-                if (ts <= lastAccelTs && lastAccelTs != 0.0) {
+                if (lastAccelTs != 0.0 && TimestampUtils.isRegression(nsToSeconds(event.timestamp), lastAccelTs)) {
                     droppedEvents++
                     return
                 }
-                lastAccel[0] = event.values[0]
-                lastAccel[1] = event.values[1]
-                lastAccel[2] = event.values[2]
-                lastAccelTs  = ts
-
-                // Update measured rate every 200 samples
+                lastAccelTs = nsToSeconds(event.timestamp)
                 accelSampleCount++
                 if (accelSampleCount % 200 == 0L) {
                     val elapsedS = (SystemClock.elapsedRealtimeNanos() - accelStartNs) / 1e9
-                    _measuredHz.value = accelSampleCount / elapsedS
+                    if (elapsedS > 0) _measuredHz.value = accelSampleCount / elapsedS
                 }
-
-                // Feed native engine: use accel timestamp as the reference.
-                // Only feed when we have at least one gyro reading.
-                if (lastGyroTs > 0.0) {
-                    // Guard duplicate
-                    if (ts == lastSentTs) {
-                        droppedEvents++
-                        return
-                    }
-                    lastSentTs = ts
-                    EngineBridge.feedImu(
-                        timestamp = ts,
-                        ax = lastAccel[0].toDouble(), ay = lastAccel[1].toDouble(), az = lastAccel[2].toDouble(),
-                        gx = lastGyro[0].toDouble(),  gy = lastGyro[1].toDouble(),  gz = lastGyro[2].toDouble()
-                    )
-                }
+                pairer.feedAccelNs(
+                    event.timestamp,
+                    event.values[0].toDouble(),
+                    event.values[1].toDouble(),
+                    event.values[2].toDouble()
+                )
             }
             Sensor.TYPE_GYROSCOPE -> {
-                if (ts <= lastGyroTs && lastGyroTs != 0.0) {
+                if (lastGyroTs != 0.0 && TimestampUtils.isRegression(nsToSeconds(event.timestamp), lastGyroTs)) {
                     droppedEvents++
                     return
                 }
-                lastGyro[0] = event.values[0]
-                lastGyro[1] = event.values[1]
-                lastGyro[2] = event.values[2]
-                lastGyroTs  = ts
+                lastGyroTs = nsToSeconds(event.timestamp)
+                pairer.feedGyroNs(
+                    event.timestamp,
+                    event.values[0].toDouble(),
+                    event.values[1].toDouble(),
+                    event.values[2].toDouble()
+                )
             }
-        }
+            else -> null
+        } ?: return
+
+        EngineBridge.feedImu(
+            timestamp = sample.timestampS,
+            ax = sample.ax, ay = sample.ay, az = sample.az,
+            gx = sample.gx, gy = sample.gy, gz = sample.gz
+        )
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {

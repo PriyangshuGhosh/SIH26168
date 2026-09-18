@@ -106,6 +106,18 @@ int main() {
     auto f = engine.match(far);
     expect(!f.is_on_road_network, "far observation off-network");
     expect(f.confidence_score < 0.5, "far observation low confidence");
+    expect(std::abs(f.lat_snapped - far.latitude) < 1e-12, "preserve unsnapped lat");
+    expect(std::abs(f.lon_snapped - far.longitude) < 1e-12, "preserve unsnapped lon");
+
+    NavigationState other_city = makeState(0.0, 28.6139, 77.2090, 0.0, 16.0); /* Delhi vs pack */
+    engine.reset();
+    auto distant = engine.match(other_city);
+    expect(!distant.is_on_road_network, "hundreds of km away is off-network");
+    expect(distant.road_segment_id == 0, "no distant segment id");
+    expect(std::abs(distant.lat_snapped - other_city.latitude) < 1e-12, "no city teleport lat");
+    expect(std::abs(distant.lon_snapped - other_city.longitude) < 1e-12, "no city teleport lon");
+    expect(engine.coversLocation(lat0, lon0), "origin inside pack bounds");
+    expect(!engine.coversLocation(28.6139, 77.2090), "Delhi outside pack bounds");
 
     // Sliding window online API determinism vs batch for short window.
     engine.reset();

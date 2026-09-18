@@ -44,6 +44,8 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<NavigationUiState> = _uiState
 
     private var pollJob: Job? = null
+    private var mapDbPath: String = ""
+    private var onnxPath: String = "mock"
 
     // ── Engine init ───────────────────────────────────────────────────────────
 
@@ -54,15 +56,21 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
      * The engine will run in degraded/stub mode in that case.
      */
     fun initEngine(mapDbPath: String = "", onnxModelPath: String = "") {
+        this.mapDbPath = mapDbPath
+        this.onnxPath = if (onnxModelPath.isEmpty()) "mock" else onnxModelPath
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val result = EngineBridge.init(mapDbPath, onnxModelPath)
+                val result = EngineBridge.init(mapDbPath, this@NavigationViewModel.onnxPath)
                 if (result == 1) {
+                    if (this@NavigationViewModel.onnxPath == "mock") {
+                        EngineBridge.setSimulation(true)
+                    }
                     Log.i(TAG, "Native engine initialized OK (map='$mapDbPath', model='$onnxModelPath')")
                     _uiState.value = _uiState.value.copy(
                         engineInitialized = true,
                         mode = NavigationMode.NO_FIX,
-                        mapStatus = if (mapDbPath.isEmpty()) "NO_MAP_PATH" else "LOADING"
+                        mapStatus = if (mapDbPath.isEmpty()) "NO_MAP_PATH" else "LOADING",
+                        simulation = EngineBridge.isSimulation()
                     )
                     startPolling()
                 } else {
@@ -104,13 +112,10 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
 
     fun simulateGnssOutage(active: Boolean) {
         gnssService.gnssOutageSimulated = active
-        // UI mode update happens in polling loop by reading is_dead_reckoning
-        // We also set the GNSS_OUTAGE_SIM mode immediately for feedback
         if (active) {
-            _uiState.value = _uiState.value.copy(mode = NavigationMode.GNSS_OUTAGE_SIM)
+            EngineBridge.setSimulation(true)
+            _uiState.value = _uiState.value.copy(mode = NavigationMode.GNSS_OUTAGE_SIM, simulation = true)
         }
-        // On deactivation, mode will revert to GNSS_AIDED or DEAD_RECKONING
-        // based on the next idr_get_current_state() result (~10 Hz)
         Log.i(TAG, "GNSS outage simulation: $active")
     }
 
@@ -118,7 +123,7 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Navigation reset ─────────────────────────────────────────────────────
 
-    fun resetNavigation(mapDbPath: String = com.example.member6app.MainActivity.MAP_DB_PATH, onnxModelPath: String = com.example.member6app.MainActivity.ONNX_MODEL_PATH) {
+    fun resetNavigation(mapDbPath: String = this.mapDbPath, onnxModelPath: String = this.onnxPath) {
         Log.i(TAG, "Resetting navigation engine")
         viewModelScope.launch(Dispatchers.IO) {
             pollJob?.cancel()
@@ -136,8 +141,14 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
             while (isActive) {
                 try {
                     val nav = EngineBridge.getCurrentState()
+                    val speedValid = EngineBridge.speedValid()
+                    val mapMsg = EngineBridge.mapStatus()
+                    val diag = DoubleArray(11)
+                    EngineBridge.diagnostics(diag)
+                    val simulation = EngineBridge.isSimulation() ||
+                        _uiState.value.simulation ||
+                        gnssService.gnssOutageSimulated
 
-                    // Determine mode from native flag and simulation state
                     val mode = when {
                         gnssService.gnssOutageSimulated -> NavigationMode.GNSS_OUTAGE_SIM
                         nav.isDeadReckoning != 0        -> NavigationMode.DEAD_RECKONING
@@ -147,17 +158,8 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
 
                     val gnssInfo = gnssService.gnssStatus.value
                     val camDiag  = cameraService.diagnostics.value
-                    
-                    // User Request: Use raw GPS speed when available and not in outage.
-                    // Use ML model speed (nav.speedMs) ONLY when GNSS outage is simulated.
-                    val rawGps = gnssService.lastLocation.value
-                    val gpsSpeedKmh = if (rawGps != null && rawGps.hasSpeed()) rawGps.speed * 3.6 else 0.0
-                    
-                    val displaySpeedKmh = if (!gnssService.gnssOutageSimulated && gnssInfo.available) {
-                        gpsSpeedKmh
-                    } else {
-                        nav.speedMs * 3.6
-                    }
+                    val speedLabel = com.example.member6app.SpeedDisplay.formatKmh(nav.speedMs, speedValid)
+                    val displaySpeedKmh = if (speedValid) nav.speedMs * 3.6 else 0.0
 
                     _uiState.value = _uiState.value.copy(
                         mode             = mode,
@@ -166,13 +168,18 @@ class NavigationViewModel(app: Application) : AndroidViewModel(app) {
                         speedKmh         = displaySpeedKmh,
                         headingDeg       = nav.headingDeg,
                         confidence       = nav.confidence,
-                        gnssAvailable    = gnssInfo.available,
+                        gnssAvailable    = gnssInfo.available && !gnssService.gnssOutageSimulated,
                         gnssSatellites   = gnssInfo.satellites,
                         gnssAccuracy     = gnssInfo.accuracy,
                         visionConfidence = camDiag.visionConfidence,
                         visionStatus     = camDiag.visionStatus,
                         imuHz            = imuService.measuredHz.value,
-                        cameraFps        = camDiag.fps
+                        cameraFps        = camDiag.fps,
+                        mapStatus        = mapMsg,
+                        speedValid       = speedValid,
+                        speedLabel       = speedLabel,
+                        simulation       = simulation,
+                        mapMessage       = if (mapMsg.contains("NOT AVAILABLE")) "Offline map unavailable for this area" else mapMsg
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "State poll error: ${e.message}")

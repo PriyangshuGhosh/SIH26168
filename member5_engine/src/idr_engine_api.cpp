@@ -118,3 +118,84 @@ const char* idr_engine_speed_backend(void) {
     }
     return e->speedBackend();
 }
+
+int idr_select_map_for_location(double lat, double lon) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->selectMapForLocation(lat, lon);
+}
+
+int idr_map_covers_location(double lat, double lon) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->mapCoversLocation(lat, lon);
+}
+
+const char* idr_active_map_region_id(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return "";
+    }
+    return e->activeMapRegionId();
+}
+
+const char* idr_map_status_message(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return "MAP DATA NOT AVAILABLE";
+    }
+    return e->mapStatusMessage();
+}
+
+int idr_speed_is_valid(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->speedIsValid();
+}
+
+const char* idr_speed_reject_reason(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return "";
+    }
+    return e->speedRejectReason();
+}
+
+IDRDiagnostics idr_get_diagnostics(void) {
+    IDRDiagnostics empty{};
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return empty;
+    }
+    return e->diagnostics();
+}
+
+void idr_engine_set_simulation(int enabled) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return;
+    }
+    e->setSimulation(enabled != 0);
+}
+
+int idr_engine_is_simulation(void) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->isSimulation() ? 1 : 0;
+}
+
+int idr_debug_inject_ai_speed(double timestamp, double velocity_mps, double variance_m2s2) {
+    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
+    if (e == nullptr) {
+        return 0;
+    }
+    return e->debugInjectAiSpeed(timestamp, velocity_mps, variance_m2s2);
+}

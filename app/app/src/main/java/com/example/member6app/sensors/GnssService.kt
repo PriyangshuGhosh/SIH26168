@@ -113,6 +113,7 @@ class GnssService(context: Context) : LocationListener {
         val poorQuality = hdopProxy > 4.0 || numSats < 4
 
         if (!gnssOutageSimulated) {
+            EngineBridge.selectMap(lat, lon)
             EngineBridge.feedGnss(
                 timestamp = ts,
                 lat       = lat,

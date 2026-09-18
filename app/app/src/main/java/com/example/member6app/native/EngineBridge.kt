@@ -11,4 +11,12 @@ object EngineBridge {
     external fun feedGnss(timestamp: Double, lat: Double, lon: Double, alt: Double, speed: Double, hdop: Double, numSats: Int)
     external fun getCurrentState(): IDRNavigationOutput
     external fun getLastError(): String
+    external fun selectMap(lat: Double, lon: Double): Boolean
+    external fun speedValid(): Boolean
+    external fun speedRejectReason(): String
+    external fun mapStatus(): String
+    external fun regionId(): String
+    external fun diagnostics(out: DoubleArray): Boolean
+    external fun setSimulation(enabled: Boolean)
+    external fun isSimulation(): Boolean
 }

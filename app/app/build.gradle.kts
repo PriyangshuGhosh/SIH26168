@@ -16,15 +16,26 @@ android {
         
         externalNativeBuild {
             cmake {
-                cppFlags("-std=c++20")
-                arguments("-DIDR_WITH_ONNXRUNTIME=ON", "-DIDR_ONNXRUNTIME_ROOT=C:/Users/anish/Desktop/SIH26168/onnxruntime_extracted")
+                val cmakeArgs = mutableListOf("-DSIH26168_BUILD_HOST_TOOLS=OFF")
+                val repoRoot = rootProject.projectDir.resolve("..")
+                val ortRoot = repoRoot.resolve("onnxruntime_extracted")
+                if (ortRoot.resolve("include/onnxruntime_cxx_api.h").exists()) {
+                    cmakeArgs += "-DIDR_WITH_ONNXRUNTIME=ON"
+                    cmakeArgs += "-DIDR_ONNXRUNTIME_ROOT=${ortRoot.absolutePath}"
+                } else {
+                    cmakeArgs += "-DIDR_WITH_ONNXRUNTIME=OFF"
+                }
+                arguments(*cmakeArgs.toTypedArray())
             }
         }
     }
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDirs("C:/Users/anish/Desktop/SIH26168/onnxruntime_extracted/lib")
+            val ortLib = rootProject.projectDir.resolve("../onnxruntime_extracted/lib")
+            if (ortLib.exists()) {
+                jniLibs.srcDirs(ortLib)
+            }
         }
     }
 

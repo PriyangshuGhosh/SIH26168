@@ -45,15 +45,23 @@ data class NavigationUiState(
     val cameraFps:        Double = 0.0,
     val engineError:      String = "",
     val engineInitialized: Boolean = false,
-    val mapStatus:        String = "NOT_LOADED"
+    val mapStatus:        String = "NOT_LOADED",
+    val speedValid:       Boolean = false,
+    val speedLabel:       String = "Speed unavailable",
+    val simulation:       Boolean = false,
+    val mapMessage:       String = ""
 ) {
-    val modeLabel: String get() = when (mode) {
-        NavigationMode.INITIALIZING    -> "INITIALIZING"
-        NavigationMode.GNSS_AIDED      -> "GNSS AIDED"
-        NavigationMode.DEAD_RECKONING  -> "DEAD RECKONING"
-        NavigationMode.GNSS_OUTAGE_SIM -> "GNSS OUTAGE — DEAD RECKONING"
-        NavigationMode.ENGINE_FAILED   -> "ENGINE FAILED"
-        NavigationMode.NO_FIX          -> "NO FIX"
+    val modeLabel: String get() = when {
+        simulation && mode == NavigationMode.GNSS_OUTAGE_SIM -> "SIMULATION — GNSS OUTAGE"
+        simulation && mode == NavigationMode.DEAD_RECKONING -> "SIMULATION — DEAD RECKONING"
+        simulation && mode == NavigationMode.GNSS_AIDED -> "SIMULATION — GNSS AIDED"
+        mode == NavigationMode.INITIALIZING    -> "INITIALIZING"
+        mode == NavigationMode.GNSS_AIDED      -> "GNSS AIDED"
+        mode == NavigationMode.DEAD_RECKONING  -> "DEAD RECKONING"
+        mode == NavigationMode.GNSS_OUTAGE_SIM -> "GNSS OUTAGE — DEAD RECKONING"
+        mode == NavigationMode.ENGINE_FAILED   -> "ENGINE FAILED"
+        mode == NavigationMode.NO_FIX          -> "NO FIX"
+        else -> mode.name
     }
 
     val gnssLabel: String get() = when {

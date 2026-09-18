@@ -39,7 +39,28 @@ fun NavigationScreen(viewModel: NavigationViewModel) {
     var showDebug by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
-        // ── Top Bar ───────────────────────────────────────────────────────────
+        if (state.simulation) {
+            Surface(color = Color(0xFFB71C1C), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "SIMULATION",
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+        if (state.mapMessage.contains("unavailable", ignoreCase = true) ||
+            state.mapStatus.contains("NOT AVAILABLE")
+        ) {
+            Surface(color = Color(0xFF37474F), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Offline map unavailable for this area",
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
         TopBar(showDebug = showDebug, onToggleDebug = { showDebug = !showDebug })
 
         // ── Map or Debug ──────────────────────────────────────────────────────

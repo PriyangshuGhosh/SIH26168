@@ -9,6 +9,11 @@ option(SIH26168_BUILD_MEMBER2 "Build Member 2 frame alignment" ON)
 option(SIH26168_BUILD_MEMBER3 "Build Member 3 sensor fusion" ON)
 option(SIH26168_BUILD_MEMBER5 "Build Member 5 native IDR engine" ON)
 
+option(SIH26168_BUILD_HOST_TOOLS "Build host tests, demos, and benchmarks" ON)
+if(ANDROID)
+  set(SIH26168_BUILD_HOST_TOOLS OFF)
+endif()
+
 enable_testing()
 
 if(SIH26168_BUILD_MEMBER2)

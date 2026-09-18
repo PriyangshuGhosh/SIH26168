@@ -20,6 +20,8 @@ endif()
 
 set(IDR_ENGINE_SOURCES
   src/SpeedEstimator.cpp
+  src/SpeedValidity.cpp
+  src/MapCatalog.cpp
   src/Engine.cpp
   src/idr_engine_api.cpp
 )
@@ -115,6 +117,10 @@ if(IDR_WITH_ONNXRUNTIME)
   endforeach()
 endif()
 
+if(NOT DEFINED SIH26168_BUILD_HOST_TOOLS)
+  set(SIH26168_BUILD_HOST_TOOLS ON)
+endif()
+if(SIH26168_BUILD_HOST_TOOLS)
 add_executable(member5_cpp_tests tests/test_member5.cpp)
 target_link_libraries(member5_cpp_tests PRIVATE idr_engine_static)
 target_include_directories(member5_cpp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
@@ -131,6 +137,10 @@ add_executable(member5_synthetic_e2e tools/synthetic_e2e.cpp)
 target_link_libraries(member5_synthetic_e2e PRIVATE idr_engine_static)
 target_include_directories(member5_synthetic_e2e PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
+add_executable(member5_simulation_demo tools/simulation_demo.cpp)
+target_link_libraries(member5_simulation_demo PRIVATE idr_engine_static)
+target_include_directories(member5_simulation_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
 enable_testing()
 add_test(NAME member5_cpp_tests COMMAND member5_cpp_tests)
 set_tests_properties(member5_cpp_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
@@ -138,3 +148,6 @@ add_test(NAME member5_benchmark COMMAND member5_benchmark)
 set_tests_properties(member5_benchmark PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_test(NAME member5_synthetic_e2e COMMAND member5_synthetic_e2e)
 set_tests_properties(member5_synthetic_e2e PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME member5_simulation_demo COMMAND member5_simulation_demo)
+set_tests_properties(member5_simulation_demo PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endif()

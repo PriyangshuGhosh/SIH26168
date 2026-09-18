@@ -20,6 +20,22 @@ The complete production-grade work distribution, interface contracts, module dep
 
 `Phone IMU/GNSS → Frame Alignment → AI Speed Estimation → EKF/UKF Fusion → Offline HMM Map Matching → Native C++ Engine → Mobile Navigation UI`
 
+Host simulation (labelled **SIMULATION**, not phone sensors):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j --target member5_simulation_demo
+./build/member5_engine/member5_simulation_demo
+```
+
+Android app (no `/sdcard` developer paths): Gradle project `app/` provisions `assets/maps` into `filesDir`. If `speed_estimator.onnx` is absent, the engine uses an explicit **mock** backend.
+
+**ANDROID HARDWARE VALIDATION: NOT AVAILABLE** until a physical device run is recorded.
+**ANDROID PERFORMANCE: NOT VALIDATED** until measured on device.
+**Real ML: NOT VALIDATED** unless a trained `speed_estimator.onnx` and dataset are present in the checkout.
+
+See [docs/architecture/README.md](docs/architecture/README.md).
+
 ### Enhanced Experimental Pipeline
 
 `Phone Camera → Depth/Visual Motion → Confidence → EKF/UKF Fusion`
@@ -49,7 +65,11 @@ Implemented under [`member5_engine/`](member5_engine/README.md). C ABI for Membe
 [`member5_engine/include/idr_engine_api.h`](member5_engine/include/idr_engine_api.h).
 Binding notes: [`docs/member5/INTEGRATION.md`](docs/member5/INTEGRATION.md).
 
-## Build
+## Member 6 (mobile)
+
+Implemented under [`member6_mobile/`](member6_mobile/README.md). Documentation:
+[`docs/member6/`](docs/member6/README.md).
+
 
 ```bash
 python3 -m pip install -r member2_alignment/requirements.txt

@@ -32,6 +32,10 @@ else()
   target_compile_options(member4_map_matching PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(NOT DEFINED SIH26168_BUILD_HOST_TOOLS)
+  set(SIH26168_BUILD_HOST_TOOLS ON)
+endif()
+if(SIH26168_BUILD_HOST_TOOLS)
 add_executable(member4_cpp_tests
   cpp/tests/test_member4.cpp
 )
@@ -51,3 +55,4 @@ add_test(NAME member4_benchmark COMMAND member4_benchmark)
 set_tests_properties(member4_benchmark PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
+endif()

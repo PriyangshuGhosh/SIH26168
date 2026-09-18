@@ -93,7 +93,8 @@ bool EKFFusionEngine::validMeasurementTime(double timestamp) const {
 
 bool EKFFusionEngine::validGnss(const GnssMeasurement& g) const {
     const bool validSpeed = !g.speed_valid ||
-                            (finiteValue(g.speed_mps) && g.speed_mps >= 0.0 && g.speed_mps <= 100.0);
+                            (finiteValue(g.speed_mps) && g.speed_mps >= 0.0 &&
+                             g.speed_mps <= config_.max_vehicle_speed_mps);
     return finiteValue(g.timestamp) && finiteValue(g.latitude) && finiteValue(g.longitude) &&
            finiteValue(g.altitude) && finiteValue(g.hdop) && validSpeed &&
            g.latitude >= -90.0 && g.latitude <= 90.0 &&
@@ -119,6 +120,7 @@ void EKFFusionEngine::predict(const member2::AlignedIMUFrame& imu, NavigationMod
     state_.mode = mode;
     state_.last_gnss_accepted = false;
     state_.last_ai_speed_accepted = false;
+    state_.last_velocity_recovered = false;
 
     if (!finiteValue(imu.timestamp) || !finiteValue(imu.ax_v) || !finiteValue(imu.ay_v) ||
         !finiteValue(imu.az_v) || !finiteValue(imu.gz_v) ||
@@ -217,9 +219,28 @@ void EKFFusionEngine::predict(const member2::AlignedIMUFrame& imu, NavigationMod
         reset();
         return;
     }
+    recoverDivergedVelocity();
     last_timestamp_ = imu.timestamp;
     state_.timestamp = imu.timestamp;
     updateNavigationState();
+}
+
+double EKFFusionEngine::hypotSpeed(double vx, double vy) {
+    return std::sqrt(vx * vx + vy * vy);
+}
+
+bool EKFFusionEngine::recoverDivergedVelocity() {
+    const double spd = hypotSpeed(x_(2), x_(3));
+    if (!finiteValue(spd) || spd > config_.max_vehicle_speed_mps) {
+        x_(2) = 0.0;
+        x_(3) = 0.0;
+        P_(2, 2) = std::max(P_(2, 2), 25.0);
+        P_(3, 3) = std::max(P_(3, 3), 25.0);
+        stabilizeCovariance(P_);
+        state_.last_velocity_recovered = true;
+        return true;
+    }
+    return false;
 }
 
 bool EKFFusionEngine::updateScalarMeasurement(
@@ -276,14 +297,15 @@ bool EKFFusionEngine::updatePositionMeasurementGated(double north, double east, 
 }
 
 bool EKFFusionEngine::updateSpeedMeasurement(double measured, double variance) {
-    if (!finiteValue(measured) || !finiteValue(variance) || measured < 0.0 || measured > 100.0 ||
-        variance <= 0.0) {
+    if (!finiteValue(measured) || !finiteValue(variance) || measured < 0.0 ||
+        measured > config_.max_vehicle_speed_mps || variance <= 0.0) {
         return false;
     }
+    const double var = std::min(std::max(variance, config_.min_speed_variance_m2s2),
+                                config_.max_speed_variance_m2s2);
     Eigen::Matrix<double, 1, kStateDim> H = Eigen::Matrix<double, 1, kStateDim>::Zero();
     H(0, 2) = 1.0;
-    return updateScalarMeasurement(measured - x_(2), H, std::max(variance, 1e-4),
-                                   config_.speed_nis_threshold);
+    return updateScalarMeasurement(measured - x_(2), H, var, config_.speed_nis_threshold);
 }
 
 bool EKFFusionEngine::updateNonHolonomicConstraint(const member2::AlignedIMUFrame& imu) {
@@ -334,8 +356,9 @@ void EKFFusionEngine::updateGnss(const GnssMeasurement& g) {
 void EKFFusionEngine::updateAiSpeed(const AiSpeedMeasurement& speed) {
     state_.last_ai_speed_accepted = false;
     if (!speed.valid || !validMeasurementTime(speed.timestamp) || !finiteValue(speed.velocity_mps) ||
-        !finiteValue(speed.variance_m2s2) || speed.velocity_mps < 0.0 || speed.velocity_mps > 100.0 ||
-        speed.variance_m2s2 <= 0.0) {
+        !finiteValue(speed.variance_m2s2) || speed.velocity_mps < 0.0 ||
+        speed.velocity_mps > config_.max_vehicle_speed_mps || speed.variance_m2s2 <= 0.0 ||
+        speed.variance_m2s2 > config_.max_speed_variance_m2s2) {
         return;
     }
 

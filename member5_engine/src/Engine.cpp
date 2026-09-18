@@ -37,6 +37,11 @@ bool startsWith(const char* s, const char* pfx) {
     return std::strncmp(s, pfx, n) == 0;
 }
 
+bool endsWith(const std::string& s, const char* suf) {
+    const std::size_t n = std::strlen(suf);
+    return s.size() >= n && s.compare(s.size() - n, n, suf) == 0;
+}
+
 double hypotSpeed(double vx, double vy) {
     return std::sqrt(vx * vx + vy * vy);
 }
@@ -86,6 +91,22 @@ bool Engine::start(const char* map_db_path, const char* onnx_model_path) {
     model_T_ = 200;
     using_mock_speed_ = false;
     backend_name_ = "none";
+    catalog_mode_ = false;
+    simulation_ = false;
+    gnss_quality_ = 0;
+    prev_dead_reckoning_ = 1;
+    last_hdop_ = 99.0;
+    last_num_sats_ = 0;
+    speed_guard_ = SpeedValidityFilter(speed_cfg_);
+    ai_guard_ = SpeedValidityFilter(speed_cfg_);
+    active_region_id_.clear();
+    map_status_ = "unknown";
+    map_coverage_ = MapCoverage::Unknown;
+    speed_reject_.clear();
+    speed_valid_ = 0;
+    last_ai_speed_ = 0.0;
+    last_gnss_speed_ = 0.0;
+    last_ekf_speed_ = 0.0;
 
     if (!loadMap(map_db_path)) {
         return false;
@@ -101,6 +122,8 @@ bool Engine::start(const char* map_db_path, const char* onnx_model_path) {
         output_.confidence = 0.0;
         road_segment_id_ = 0;
         is_on_road_ = 0;
+        speed_valid_ = 0;
+        diagnostics_ = IDRDiagnostics{};
     }
 
     running_.store(true, std::memory_order_release);
@@ -108,10 +131,27 @@ bool Engine::start(const char* map_db_path, const char* onnx_model_path) {
     return true;
 }
 
+bool Engine::applyRoadpack(const std::string& path) {
+    if (!matcher_.loadRoadpack(path)) {
+        last_error_ = matcher_.lastError().empty() ? ("invalid roadpack: " + path) : matcher_.lastError();
+        return false;
+    }
+    if (!matcher_.hasMap()) {
+        last_error_ = "roadpack contained no segments: " + path;
+        return false;
+    }
+    double min_lat = 0, max_lat = 0, min_lon = 0, max_lon = 0;
+    if (!catalog_mode_ && matcher_.geographicBounds(min_lat, max_lat, min_lon, max_lon)) {
+        catalog_.setBoundsFromGeometry(min_lat, max_lat, min_lon, max_lon);
+    }
+    return true;
+}
+
 bool Engine::loadMap(const char* map_db_path) {
     const std::string path = (map_db_path != nullptr) ? map_db_path : "";
+    catalog_mode_ = false;
     if (path.empty()) {
-        last_error_ = "map_db_path is required (offline .roadpack)";
+        last_error_ = "map_db_path is required (offline .roadpack or maps/manifest.json)";
         return false;
     }
     if (path == "mock" || startsWith(path.c_str(), "mock:")) {
@@ -125,18 +165,35 @@ bool Engine::loadMap(const char* map_db_path) {
             "member4_map_matching/python/tools/build_road_database.py)";
         return false;
     }
+    if (endsWith(path, "manifest.json") || endsWith(path, "/maps") || endsWith(path, "\\maps")) {
+        std::string manifest = path;
+        if (!endsWith(path, "manifest.json")) {
+            manifest = path + "/manifest.json";
+        }
+        if (!catalog_.loadManifestFile(manifest)) {
+            last_error_ = catalog_.lastError();
+            return false;
+        }
+        catalog_mode_ = true;
+        map_status_ = "catalog_loaded_awaiting_location";
+        map_coverage_ = MapCoverage::Unknown;
+        active_region_id_.clear();
+        return true;
+    }
     if (!fileExists(path.c_str())) {
         last_error_ = "map file not found: " + path;
         return false;
     }
-    if (!matcher_.loadRoadpack(path)) {
-        last_error_ = matcher_.lastError().empty() ? ("invalid roadpack: " + path) : matcher_.lastError();
+    if (!catalog_.loadSingleRoadpack(path, "provisioned")) {
+        last_error_ = catalog_.lastError();
         return false;
     }
-    if (!matcher_.hasMap()) {
-        last_error_ = "roadpack contained no segments: " + path;
+    if (!applyRoadpack(path)) {
         return false;
     }
+    active_region_id_ = "provisioned";
+    map_status_ = "single_roadpack_loaded";
+    map_coverage_ = MapCoverage::Unknown;
     return true;
 }
 
@@ -148,6 +205,7 @@ bool Engine::loadSpeed(const char* onnx_model_path) {
         speed_->load(onnx_model_path ? onnx_model_path : "");
         backend_name_ = speed_->backendName();
         model_T_ = speed_->requiredWindowSamples();
+        simulation_ = true;
         return true;
     }
 
@@ -205,6 +263,10 @@ bool Engine::feedGnss(const GnssSample& s) {
         return false;
     }
     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
+    last_gnss_speed_ = s.speed;
+    last_gnss_t_ = s.timestamp;
+    last_hdop_ = s.hdop;
+    last_num_sats_ = s.num_sats;
     {
         std::lock_guard<std::mutex> lock(state_mu_);
         output_.timestamp = s.timestamp;
@@ -213,7 +275,15 @@ bool Engine::feedGnss(const GnssSample& s) {
         if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
             output_.lat = s.lat;
             output_.lon = s.lon;
-            output_.speed_m_s = s.speed;
+            if (SpeedValidityFilter::finiteNonNegative(s.speed) &&
+                s.speed <= speed_cfg_.max_vehicle_speed_mps) {
+                output_.speed_m_s = s.speed;
+                speed_valid_ = 1;
+                speed_reject_.clear();
+            } else {
+                speed_valid_ = 0;
+                speed_reject_ = "gnss_speed_rejected";
+            }
         }
     }
     return gnss_q_.push(s);
@@ -232,6 +302,156 @@ std::int64_t Engine::roadSegmentId() const {
 int Engine::isOnRoadNetwork() const {
     std::lock_guard<std::mutex> lock(state_mu_);
     return is_on_road_;
+}
+
+int Engine::speedIsValid() const {
+    std::lock_guard<std::mutex> lock(state_mu_);
+    return speed_valid_;
+}
+
+const char* Engine::speedRejectReason() const { return speed_reject_.c_str(); }
+const char* Engine::activeMapRegionId() const { return active_region_id_.c_str(); }
+const char* Engine::mapStatusMessage() const { return map_status_.c_str(); }
+
+int Engine::mapCoversLocation(double lat, double lon) const {
+    std::lock_guard<std::mutex> maplock(map_mu_);
+    if (matcher_.hasMap() && matcher_.coversLocation(lat, lon)) {
+        return 1;
+    }
+    return catalog_.covers(lat, lon) ? 1 : 0;
+}
+
+int Engine::selectMapForLocation(double lat, double lon) {
+    /* Not on the 100 Hz IMU callback. GNSS/UI/worker GNSS path only. */
+    if (!std::isfinite(lat) || !std::isfinite(lon)) {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        map_coverage_ = MapCoverage::Unknown;
+        map_status_ = "MAP DATA NOT AVAILABLE";
+        return 0;
+    }
+
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        if (matcher_.hasMap() && matcher_.coversLocation(lat, lon)) {
+            std::lock_guard<std::mutex> lock(state_mu_);
+            map_coverage_ = MapCoverage::InRegion;
+            map_status_ = "in_region";
+            if (active_region_id_.empty()) {
+                active_region_id_ = "provisioned";
+            }
+            return 1;
+        }
+    }
+
+    std::string load_path;
+    std::string load_id;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        const MapRegion* r = catalog_.findCovering(lat, lon);
+        if (r == nullptr) {
+            std::lock_guard<std::mutex> lock(state_mu_);
+            map_coverage_ =
+                catalog_.regions().empty() ? MapCoverage::NoPackage : MapCoverage::OutOfRegion;
+            map_status_ = "MAP DATA NOT AVAILABLE";
+            return 0;
+        }
+        load_id = r->id;
+        load_path = r->roadpack_path;
+    }
+
+    std::string already;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        std::lock_guard<std::mutex> lock(state_mu_);
+        already = active_region_id_;
+        if (already == load_id && matcher_.hasMap()) {
+            if (matcher_.coversLocation(lat, lon)) {
+                map_coverage_ = MapCoverage::InRegion;
+                map_status_ = "in_region";
+                return 1;
+            }
+            map_coverage_ = MapCoverage::OutOfRegion;
+            map_status_ = "MAP DATA NOT AVAILABLE";
+            return 0;
+        }
+    }
+
+    std::lock_guard<std::mutex> maplock(map_mu_);
+    if (!applyRoadpack(load_path)) {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        map_coverage_ = MapCoverage::NoPackage;
+        map_status_ = "MAP DATA NOT AVAILABLE";
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(state_mu_);
+    active_region_id_ = load_id;
+    if (!matcher_.coversLocation(lat, lon)) {
+        map_coverage_ = MapCoverage::OutOfRegion;
+        map_status_ = "MAP DATA NOT AVAILABLE";
+        return 0;
+    }
+    map_coverage_ = MapCoverage::InRegion;
+    map_status_ = "in_region";
+    return 1;
+}
+
+void Engine::setSimulation(bool enabled) { simulation_ = enabled; }
+
+bool Engine::isSimulation() const { return simulation_ || using_mock_speed_; }
+
+int Engine::debugInjectAiSpeed(double timestamp, double velocity_mps, double variance_m2s2) {
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    last_ai_speed_ = velocity_mps;
+    SpeedRejectReason why = SpeedRejectReason::None;
+    if (!ai_guard_.acceptAiMeasurement(timestamp, velocity_mps, variance_m2s2, &why)) {
+        last_ai_accepted_ = 0;
+        speed_reject_ = speedRejectReasonCString(why);
+        skip_ai_until_t_ = timestamp + 0.25;
+        imu_q_.clear();
+        publishFromFusionState();
+        return 0;
+    }
+    sih26168::member3::AiSpeedMeasurement meas;
+    meas.timestamp = timestamp;
+    meas.velocity_mps = velocity_mps;
+    meas.variance_m2s2 = variance_m2s2;
+    meas.valid = true;
+    fusion_.updateAiSpeed(meas);
+    last_ai_accepted_ = fusion_.state().last_ai_speed_accepted ? 1 : 0;
+    if (!fusion_.state().last_ai_speed_accepted) {
+        speed_reject_ = "ekf_innovation_rejected";
+    }
+    skip_ai_until_t_ = timestamp + 0.25;
+    imu_q_.clear();
+    publishFromFusionState();
+    return last_ai_accepted_;
+}
+
+void Engine::maybeSelectMapFromGnss(double lat, double lon) {
+    (void)selectMapForLocation(lat, lon);
+}
+
+IDRDiagnostics Engine::diagnostics() const {
+    std::lock_guard<std::mutex> lock(state_mu_);
+    return diagnostics_;
+}
+
+void Engine::noteImuRate(double timestamp) {
+    if (!std::isfinite(timestamp)) {
+        return;
+    }
+    if (imu_rate_n_ == 0) {
+        imu_rate_t_ = timestamp;
+        imu_rate_n_ = 1;
+        return;
+    }
+    ++imu_rate_n_;
+    const double dt = timestamp - imu_rate_t_;
+    if (dt >= 0.5) {
+        imu_hz_ = static_cast<double>(imu_rate_n_ - 1) / dt;
+        imu_rate_t_ = timestamp;
+        imu_rate_n_ = 1;
+    }
 }
 
 void Engine::workerLoop() {
@@ -259,19 +479,25 @@ void Engine::handleGnss(const GnssSample& s) {
     aid.num_sats = s.num_sats;
     aligner_.feedGnss(aid);
 
+    last_hdop_ = s.hdop;
+    last_num_sats_ = s.num_sats;
+    maybeSelectMapFromGnss(s.lat, s.lon);
     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
-    if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
-        sih26168::member3::GnssMeasurement g;
-        g.timestamp = s.timestamp;
-        g.latitude = s.lat;
-        g.longitude = s.lon;
-        g.altitude = s.alt;
-        g.speed_mps = s.speed;
-        g.hdop = s.hdop;
-        g.num_sats = s.num_sats;
-        fusion_.updateGnss(g);
+    {
+        std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+        if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
+            sih26168::member3::GnssMeasurement g;
+            g.timestamp = s.timestamp;
+            g.latitude = s.lat;
+            g.longitude = s.lon;
+            g.altitude = s.alt;
+            g.speed_mps = s.speed;
+            g.hdop = s.hdop;
+            g.num_sats = s.num_sats;
+            fusion_.updateGnss(g);
+        }
+        publishFromFusionState();
     }
-    publishLocked();
 }
 
 void Engine::handleImu(const ImuSample& s) {
@@ -280,8 +506,9 @@ void Engine::handleImu(const ImuSample& s) {
         return;
     }
 
-    const auto mode = deficit_.evaluate(s.timestamp);
-    fusion_.predict(aligned, mode);
+    last_cal_status_ = static_cast<int>(aligned.status);
+    last_imu_t_ = s.timestamp;
+    noteImuRate(s.timestamp);
 
     const float ch[kChannels] = {
         static_cast<float>(aligned.ax_v / 9.80665f), static_cast<float>(aligned.ay_v / 9.80665f),
@@ -290,28 +517,47 @@ void Engine::handleImu(const ImuSample& s) {
 
     ++stride_count_;
     pushAlignedSample(ch);
+
+    SpeedEstimate est{};
+    bool run_ai = false;
     if (speed_ && window_count_ >= model_T_ && stride_count_ >= kStride) {
         stride_count_ = 0;
-        const int src0 = window_count_ - model_T_;
-        SpeedEstimate est =
-            speed_->predict(window_.data() + src0 * kChannels, model_T_);
-        
-        if (aligned.status == sih26168::member2::CalibrationStatus::STATIC_DETECTED) {
+        est = speed_->predict(window_.data() + (window_count_ - model_T_) * kChannels, model_T_);
+        if (aligned.status == sih26168::member2::CalibrationStatus::STATIC_DETECTED &&
+            (!speed_guard_.haveTrusted() || speed_guard_.lastTrustedMps() < 1.0)) {
             est.velocity_mps = 0.0f;
             est.valid = true;
         }
+        run_ai = est.valid && s.timestamp > skip_ai_until_t_;
+    }
 
-        if (est.valid) {
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    const auto mode = deficit_.evaluate(s.timestamp);
+    fusion_.predict(aligned, mode);
+
+    if (run_ai) {
+        last_ai_speed_ = static_cast<double>(est.velocity_mps);
+        SpeedRejectReason why = SpeedRejectReason::None;
+        const double var = std::max(static_cast<double>(est.variance_m2s2),
+                                    speed_cfg_.min_speed_variance_m2s2);
+        if (ai_guard_.acceptAiMeasurement(s.timestamp, last_ai_speed_, var, &why)) {
             sih26168::member3::AiSpeedMeasurement meas;
             meas.timestamp = s.timestamp;
-            meas.velocity_mps = static_cast<double>(est.velocity_mps);
-            meas.variance_m2s2 = static_cast<double>(est.variance_m2s2);
+            meas.velocity_mps = last_ai_speed_;
+            meas.variance_m2s2 = var;
             meas.valid = true;
             fusion_.updateAiSpeed(meas);
+            last_ai_accepted_ = fusion_.state().last_ai_speed_accepted ? 1 : 0;
+            if (!fusion_.state().last_ai_speed_accepted) {
+                speed_reject_ = "ekf_innovation_rejected";
+            }
+        } else {
+            last_ai_accepted_ = 0;
+            speed_reject_ = speedRejectReasonCString(why);
         }
     }
 
-    publishLocked();
+    publishFromFusionState();
 }
 
 void Engine::pushAlignedSample(const float* ch6) {
@@ -326,27 +572,105 @@ void Engine::pushAlignedSample(const float* ch6) {
 }
 
 void Engine::publishLocked() {
+    std::lock_guard<std::mutex> fusion_lock(fusion_mu_);
+    publishFromFusionState();
+}
+
+void Engine::publishFromFusionState() {
     const auto& nav = fusion_.state();
-    const auto match = matcher_.match(nav);
+    sih26168::member4::MapMatchedPosition match;
+    {
+        std::lock_guard<std::mutex> maplock(map_mu_);
+        if (matcher_.hasMap() && matcher_.coversLocation(nav.latitude, nav.longitude)) {
+            match = matcher_.match(nav);
+        } else {
+            match.timestamp = nav.timestamp;
+            match.lat_snapped = nav.latitude;
+            match.lon_snapped = nav.longitude;
+            match.heading_snapped_rad = nav.yaw_rad;
+            match.confidence_score = 0.0;
+            match.is_on_road_network = false;
+            match.road_segment_id = 0;
+        }
+    }
     const auto mode = nav.mode;
+    const double ekf_speed = hypotSpeed(nav.v_x, nav.v_y);
+    last_ekf_speed_ = ekf_speed;
+
+    SpeedRejectReason why = SpeedRejectReason::None;
+    double publish_speed = ekf_speed;
+    int valid = 0;
+    if (nav.last_velocity_recovered) {
+        why = SpeedRejectReason::RecoveredDivergence;
+        if (speed_guard_.haveTrusted()) {
+            publish_speed = speed_guard_.lastTrustedMps();
+        } else {
+            publish_speed = 0.0;
+        }
+        speed_reject_ = speedRejectReasonCString(why);
+    } else if (speed_guard_.accept(nav.timestamp, ekf_speed, &why)) {
+        publish_speed = ekf_speed;
+        valid = 1;
+        speed_reject_.clear();
+    } else {
+        if (speed_guard_.haveTrusted()) {
+            publish_speed = speed_guard_.lastTrustedMps();
+        } else {
+            publish_speed = 0.0;
+        }
+        speed_reject_ = speedRejectReasonCString(why);
+    }
 
     IDRNavigationOutput out{};
     out.timestamp = match.timestamp != 0.0 ? match.timestamp : nav.timestamp;
     out.lat = match.lat_snapped;
     out.lon = match.lon_snapped;
     out.heading_deg = match.heading_snapped_rad * kRadToDeg;
-    out.speed_m_s = hypotSpeed(nav.v_x, nav.v_y);
+    out.speed_m_s = publish_speed;
     out.is_dead_reckoning = (mode == sih26168::member3::NavigationMode::DEAD_RECKONING) ? 1 : 0;
     double conf = match.confidence_score;
     if (out.is_dead_reckoning) {
         conf *= 0.85;
     }
+    if (!valid) {
+        conf *= 0.4;
+    }
     out.confidence = conf;
+
+    IDRDiagnostics d{};
+    d.raw_gnss_speed_mps = last_gnss_speed_;
+    d.ai_speed_mps = last_ai_speed_;
+    d.ekf_speed_mps = ekf_speed;
+    d.displayed_speed_mps = publish_speed;
+    d.speed_valid = valid;
+    d.map_status = static_cast<int>(map_coverage_);
+    d.calibration_status = last_cal_status_;
+    d.last_ai_speed_accepted = last_ai_accepted_;
+    d.imu_hz = imu_hz_;
+    d.last_imu_timestamp = last_imu_t_;
+    d.last_gnss_timestamp = last_gnss_t_;
+    const int band = GnssDeficitMachine::qualityBand(last_hdop_, last_num_sats_);
+    int gq = 1; /* outage */
+    if (mode != sih26168::member3::NavigationMode::DEAD_RECKONING) {
+        if (prev_dead_reckoning_ != 0) {
+            gq = 4; /* recovering */
+        } else if (band == 2) {
+            gq = 2;
+        } else {
+            gq = 3;
+        }
+    }
+    prev_dead_reckoning_ = out.is_dead_reckoning;
+    gnss_quality_ = gq;
+    d.gnss_quality = gq;
+    d.simulation = (simulation_ || using_mock_speed_) ? 1 : 0;
 
     std::lock_guard<std::mutex> lock(state_mu_);
     output_ = out;
+    diagnostics_ = d;
     road_segment_id_ = match.road_segment_id;
     is_on_road_ = match.is_on_road_network ? 1 : 0;
+    speed_valid_ = valid;
 }
 
 }  // namespace sih26168::member5
