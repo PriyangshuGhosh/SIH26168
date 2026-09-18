@@ -1,4 +1,5 @@
 build/
+build-ort/
 build-mingw/
 .cache/
 __pycache__/
@@ -13,4 +14,12 @@ member5_engine/tests/data/*.csv
 third_party/eigen/
 member4_map_matching/data/*.sqlite
 member4_map_matching/data/small_road_network.roadpack
-member4_map_matching/data/*.png
+app/crash_log.txt
+app/fresh_crash.txt
+app/log.txt
+app/logcat_dump.txt
+app/all_logs.txt
+app/.idea/
+app/.kotlin/
+onnxruntime.zip
+.cursor/
