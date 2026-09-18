@@ -64,6 +64,9 @@ int main() {
     std::cout << "p99_ns " << pct(0.99) << "\n";
     std::cout << "max_ns " << sorted.back() << "\n";
     std::cout << "budget_100hz_ns " << 1.0e7 << "\n";
+    const double throughput_hz = 1.0e9 / avg;
+    std::cout << "throughput_hz " << throughput_hz << "\n";
+    std::cout << "sustains_100hz " << (avg < 1.0e7 ? 1 : 0) << "\n";
     std::cout << "sink " << dummy << "\n";
-    return 0;
+    return (avg < 1.0e7 && std::isfinite(avg)) ? 0 : 1;
 }

@@ -1,0 +1,6 @@
+networkx>=3.0
+shapely>=2.0
+pyproj>=3.6
+pytest>=8.0
+# Optional OSM download (not required for offline runtime/tests):
+# osmnx>=1.9

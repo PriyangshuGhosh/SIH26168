@@ -1,30 +1,23 @@
 # Member 5 test data
 
-`synthetic_e2e_log.csv` is **generated** by `member5_synthetic_e2e` and is gitignored;
-nothing here needs to be committed.
+`synthetic_e2e_log.csv` is **generated** by `member5_synthetic_e2e` and should not be treated as field data.
 
 ## Scenario
 
-40 s synthetic drive on a pure north-south road at lon 77.5946:
+30 s synthetic drive on Member 4 `synthetic_grid.roadpack` (origin 12.9716, 77.5946). Distance stays inside the ~240 m grid.
 
 | Window | What happens |
 |---|---|
-| 0-3 s | Static (lets Member 2 lock gravity) |
-| 3-9 s | Constant 2.5 m/s2 accel to 15 m/s (lets Member 2 observe yaw) |
-| 9-20 s | Cruise, GNSS at 1 Hz |
-| 20-35 s | Tunnel: no GNSS, engine must hold dead reckoning |
-| 35-40 s | GNSS reacquired, engine must exit DR |
+| 0-3 s | Static (Member 2 gravity) |
+| 3-7 s | Accel to 8 m/s |
+| 7-16 s | Cruise, GNSS at 1 Hz |
+| 16-24 s | Tunnel: no GNSS; deficit SM + EKF dead reckoning |
+| 24-30 s | GNSS reacquired |
 
-IMU is fed at 100 Hz; the log is sampled every 10th IMU sample (10 Hz), matching the
-rate Member 6 polls `idr_get_current_state`.
+IMU is **100 Hz**. Member 5 packs Member 1 windows at that same rate (T=200 samples = 2 s, stride 10). The engine uses **real** Member 2, Member 3 EKF, and Member 4 `MapMatchingEngine`. Member 1 is the **explicit** `"mock"` estimator unless ONNX Runtime + `speed_estimator.onnx` are provided.
+
+`dummy_speed_estimator.onnx` is a **wiring fixture** (Member 1 I/O names, `[1,200,6]` at 100 Hz). It is not a trained speed model. Regenerate with `python3 member5_engine/scripts/make_dummy_onnx.py`.
 
 ## Columns
 
-| Column | Meaning |
-|---|---|
-| `t` | Engine state timestamp (s) |
-| `gt_lat`, `gt_lon`, `gt_speed` | Ground truth from the scenario generator |
-| `est_lat`, `est_lon`, `est_speed` | Engine output |
-| `dr` | `1` while dead reckoning, `0` when GNSS-aided |
-| `confidence` | `IDRNavigationOutput.confidence` |
-| `err_m` | Horizontal error between truth and estimate (m) |
+Same as before: `t,gt_*,est_*,dr,confidence,err_m`.

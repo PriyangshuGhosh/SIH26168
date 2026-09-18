@@ -1,6 +1,6 @@
 #pragma once
 
-#include "member5/fusion_types.h"
+#include "member3/EKFFusionEngine.hpp"
 
 #include <atomic>
 #include <cmath>

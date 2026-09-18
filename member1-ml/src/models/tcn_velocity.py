@@ -84,7 +84,8 @@ class VelocityNet(nn.Module):
     """
 
     def __init__(self, arch: str, channels: int, kernel_size: int, dilations: list[int], dropout: float,
-                uncertainty: bool = False, log_var_min: float = -6.0, log_var_max: float = 6.0):
+                uncertainty: bool = False, log_var_min: float = -6.0, log_var_max: float = 6.0,
+                derive_magnitude_channels: bool = False):
         super().__init__()
         if arch not in ("cnn", "tcn"):
             raise ValueError(f"unknown arch {arch!r}")
@@ -93,7 +94,14 @@ class VelocityNet(nn.Module):
         self.arch = arch
         self.uncertainty = bool(uncertainty)
         self.log_var_min, self.log_var_max = float(log_var_min), float(log_var_max)
-        blocks, in_ch = [], N_CHANNELS
+        self.derive_magnitude_channels = bool(derive_magnitude_channels)
+        # Public input/output contract is always [B, T, N_CHANNELS] (6): |acc|/|gyr| magnitude, when
+        # enabled, is derived internally from that same 6-channel input (same timestep only, no
+        # lookahead) and only changes the *internal* channel count the conv blocks operate on -- see
+        # `features()`. This keeps every external caller (windowing, ONNX graph I/O, the production
+        # Member 2 adapter) unchanged regardless of this flag.
+        eff_channels = N_CHANNELS + 2 if self.derive_magnitude_channels else N_CHANNELS
+        blocks, in_ch = [], eff_channels
         for d in dilations:
             blocks.append(ResidualBlock(in_ch, channels, kernel_size, d, dropout))
             in_ch = channels
@@ -107,7 +115,7 @@ class VelocityNet(nn.Module):
             nn.init.zeros_(self.log_var_head.weight)
             nn.init.zeros_(self.log_var_head.bias)
         self.receptive_field = 1 + 2 * (kernel_size - 1) * sum(dilations)
-        self.register_buffer("input_scale", torch.ones(N_CHANNELS))
+        self.register_buffer("input_scale", torch.ones(eff_channels))
         self.register_buffer("target_mean", torch.zeros(()))
         self.register_buffer("target_std", torch.ones(()))
         self.register_buffer("confidence_ref_sigma", torch.ones(()))
@@ -137,9 +145,18 @@ class VelocityNet(nn.Module):
         return 1.0 / (1.0 + sigma / self.confidence_ref_sigma)
 
     def features(self, x: torch.Tensor) -> torch.Tensor:
-        """``[B, T, 6]`` -> per-step causal features ``[B, C, T]``."""
+        """``[B, T, 6]`` -> per-step causal features ``[B, C, T]``.
+
+        The public input is always the raw 6-channel window; when ``derive_magnitude_channels`` is
+        set, ``|acc|``/``|gyr|`` at each timestep (same-timestep only, causal, no lookahead) are
+        appended before normalization and the conv blocks -- see ``__init__``.
+        """
         if x.ndim != 3 or x.shape[-1] != N_CHANNELS:
             raise ValueError(f"expected [B, T, {N_CHANNELS}], got {tuple(x.shape)}")
+        if self.derive_magnitude_channels:
+            acc_mag = x[..., 0:3].norm(dim=-1, keepdim=True)
+            gyr_mag = x[..., 3:6].norm(dim=-1, keepdim=True)
+            x = torch.cat([x, acc_mag, gyr_mag], dim=-1)
         return self.blocks((x / self.input_scale).transpose(1, 2))
 
     def forward_full(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -161,16 +178,23 @@ class VelocityNet(nn.Module):
 
 def build_model(arch: str, model_cfg: dict[str, Any]) -> VelocityNet:
     """Build from the ``models.<arch>`` config section. ``uncertainty`` defaults to ``False`` (the
-    Milestone 2 point-estimate behaviour) so existing configs and checkpoints are unaffected."""
-    if arch == "cnn":
+    Milestone 2 point-estimate behaviour) so existing configs and checkpoints are unaffected.
+
+    ``"cnn_mag"`` is a config-selection alias for ``"cnn"`` (non-dilated blocks, mean-pool readout):
+    it exists only so ``models.cnn_mag`` in ``configs/member1.yaml`` can set
+    ``derive_magnitude_channels: true`` independently of the plain ``models.cnn`` section, without
+    a new architecture family -- ``VelocityNet.arch`` is still ``"cnn"`` either way.
+    """
+    base_arch = "cnn" if arch in ("cnn", "cnn_mag") else arch
+    if base_arch == "cnn":
         dilations = [1] * int(model_cfg["n_blocks"])
-    elif arch == "tcn":
+    elif base_arch == "tcn":
         dilations = [int(d) for d in model_cfg["dilations"]]
     else:
         raise ValueError(f"unknown arch {arch!r}")
-    return VelocityNet(arch, int(model_cfg["channels"]), int(model_cfg["kernel_size"]), dilations, float(model_cfg["dropout"]),
+    return VelocityNet(base_arch, int(model_cfg["channels"]), int(model_cfg["kernel_size"]), dilations, float(model_cfg["dropout"]),
                        bool(model_cfg.get("uncertainty", False)), float(model_cfg.get("log_var_min", -6.0)),
-                       float(model_cfg.get("log_var_max", 6.0)))
+                       float(model_cfg.get("log_var_max", 6.0)), bool(model_cfg.get("derive_magnitude_channels", False)))
 
 
 def log_var_to_sigma(log_var_mps2: torch.Tensor) -> torch.Tensor:
@@ -178,11 +202,19 @@ def log_var_to_sigma(log_var_mps2: torch.Tensor) -> torch.Tensor:
     return torch.exp(0.5 * log_var_mps2)
 
 
-def fit_normalization(train_imu: np.ndarray, train_targets: np.ndarray) -> tuple[np.ndarray, float, float]:
-    """Fit input scale (per sensor RMS) and target mean/std on TRAINING data only."""
+def fit_normalization(train_imu: np.ndarray, train_targets: np.ndarray,
+                       derive_magnitude_channels: bool = False) -> tuple[np.ndarray, float, float]:
+    """Fit input scale (per sensor RMS) and target mean/std on TRAINING data only.
+
+    When ``derive_magnitude_channels`` matches the model's own flag, two extra scale entries are
+    appended (reusing ``acc_rms``/``gyr_rms``, since ``|acc|``/``|gyr|`` share their source triplet's
+    physical units) so the returned array matches ``VelocityNet``'s ``input_scale`` buffer shape.
+    """
     acc_rms = float(np.sqrt(np.mean(np.square(train_imu[:, 0:3], dtype=np.float64))))
     gyr_rms = float(np.sqrt(np.mean(np.square(train_imu[:, 3:6], dtype=np.float64))))
     scale = np.array([acc_rms] * 3 + [gyr_rms] * 3, dtype=np.float32)
+    if derive_magnitude_channels:
+        scale = np.concatenate([scale, [acc_rms, gyr_rms]]).astype(np.float32)
     if not np.all(np.isfinite(scale)) or np.any(scale <= 0):
         raise ValueError(f"invalid input scale {scale}")
     return scale, float(np.mean(train_targets)), float(np.std(train_targets))

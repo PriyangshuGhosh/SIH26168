@@ -1,0 +1,10 @@
+{
+  "dataset": "SYNTHETIC_GRID",
+  "note": "Not real-world OSM / GNSS accuracy. Parallel-road spike injected.",
+  "n": 40,
+  "hmm_mean_error_m_on_road": 13.81782260104214,
+  "nearest_mean_error_m_on_road": 14.134666537928524,
+  "hmm_on_road_fraction": 0.975,
+  "nearest_on_road_fraction": 0.475,
+  "hmm_mean_confidence": 0.7482962320095246
+}

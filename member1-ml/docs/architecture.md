@@ -20,7 +20,7 @@ gather_windows / iter_window_chunks ──► float32 [B, T, 6]     (augmentatio
         ▼
 baselines / VelocityNet  ──►  speed predictions (B,) m/s  ──►  metrics (overall / per trip & session / stationary-moving / speed bins)
         ▼ (VelocityNet only, deployment path)
-predict_contract / ONNX export  ──►  {velocity_mps, uncertainty, confidence, timestamp}  ──►  Member 3's EKF/UKF
+predict_contract / ONNX export  ──►  {velocity_mps, velocity_variance_m2s2, confidence, timestamp}  ──►  Member 3's EKF/UKF
 ```
 
 ## Modules
@@ -43,7 +43,8 @@ predict_contract / ONNX export  ──►  {velocity_mps, uncertainty, confidenc
 | `scripts/run_baselines.py` | Milestone 1 experiment. |
 | `scripts/run_training.py` | Milestone 2 experiment: trains every arch × window combination, evaluates it, and compares with the baselines. |
 | `scripts/run_uncertainty.py` | Milestone 3 experiment: augmentation-policy comparison, final-selection matrix, point-vs-NLL ablation, single final test evaluation. |
-| `src/inference/predict.py` | `predict_contract`: turns a checkpoint's predictions into the Member 1 output-contract records (see `docs/member1_output_contract.md`). |
+| `src/inference/predict.py` | `predict_contract`: turns a checkpoint's predictions into the Member 1 output-contract records (see `docs/member1_output_contract.md`). `predict_contract_production` does the same for a single raw Member 2 100 Hz window. |
+| `src/inference/member2_interface.py` | Production Member 2 -> Member 1 adapter: `ProductionWindowBuffer` (causal 100 Hz ring buffer, status-gated) and decimation to the model's native 10 Hz resolution (see `docs/production_100hz.md`). |
 | `src/inference/export_onnx.py` | Milestone 4: `InferenceModule` (wraps `forward_full` in the output-contract math), `export_model`, and ONNX Runtime verification helpers (`compare_pytorch_onnx`, `verify_shapes_and_finite`). |
 | `src/inference/benchmark.py` | Milestone 4: CPU latency (PyTorch and ONNX Runtime), throughput, model size, parameter count. |
 | `scripts/export_onnx.py` | Milestone 4 CLI: exports the final checkpoint, runs every verification check, writes the benchmark report. |
@@ -95,8 +96,19 @@ CausalConv: left pad (k−1)·d, no right pad
 | channels / kernel | 32 / 5 | 32 / 3 |
 | receptive field (samples) | 25 (GAP covers the whole window) | 61 (≥ 40) |
 | readout | global average over the window | last time step |
-| parameters | 27,233 | 22,881 |
+| parameters | 27,233 (27,650 with `derive_magnitude_channels`) | 22,881 |
 | checkpoint size | about 124 KB | about 124 KB |
+
+**`derive_magnitude_channels`** (opt-in, `models.cnn_mag` in `configs/member1.yaml`; selected as the
+production window=20 model, see `docs/production_100hz.md`): `VelocityNet.features()` derives two
+extra channels, `|acc|` and `|gyr|` at each timestep, from the same-timestep raw 6-channel input
+(purely causal, no lookahead, no new sensor) before dividing by `input_scale` and entering the conv
+blocks. The public `[B, T, 6]` input/output contract -- and so every ONNX graph shape, the
+`ProductionWindowBuffer` interface, and `ProductionInferenceModule` -- is unaffected; only
+`VelocityNet`'s internal effective channel count (8 instead of 6) and `input_scale` buffer size
+change. `build_model("cnn_mag", model_cfg)` is a config-selection alias for `arch="cnn"` (same
+mean-pool readout); `fit_normalization(..., derive_magnitude_channels=True)` appends two scale entries
+(reusing `acc_rms`/`gyr_rms`, since magnitude shares its source triplet's physical units).
 
 - **Causality.** In eval mode, the feature at step t depends only on inputs at steps ≤ t, which tests verify. Every sample in a window is at or before the prediction point, so both readouts are causal. A TCN's last-step output also matches the output of a streaming model with a longer history, within its receptive field.
 - **Normalization inside the model.** Fitted on training rows only and saved in the checkpoint:
@@ -200,15 +212,21 @@ policy's transform is the identity, so passing nothing is safe for the shipped (
 
 `src/inference/export_onnx.py::InferenceModule` wraps a trained `VelocityNet` so its forward pass
 returns exactly the numeric output-contract fields (`velocity_mps`, and for an uncertainty model also
-`uncertainty` and `confidence`) -- the same clamp/exp/confidence-from-sigma math `predict_contract`
-uses, not a reimplementation. `export_model(model, window, path)` traces this wrapper with
-`torch.onnx.export(..., dynamo=False, opset_version=17)`: the legacy TorchScript-based exporter, kept
-deliberately instead of the newer `torch.export`-based default (a `DeprecationWarning` on recent torch
-versions), because that one needs an extra `onnxscript` dependency this project doesn't otherwise
-require, and the legacy exporter already verifies correctly (see `docs/experiments.md`'s Milestone 4
-section for the actual PyTorch-vs-ONNX agreement numbers). Only the batch axis is dynamic; window
-length is fixed at export time, matching every other place in this repo that treats window length as
-a fixed config value.
+`velocity_variance_m2s2` and `confidence`) -- the same clamp/exp/confidence-from-sigma math
+`predict_contract` uses, not a reimplementation. `export_model(model, window, path)` traces this
+wrapper with `torch.onnx.export(..., dynamo=False, opset_version=17)`: the legacy TorchScript-based
+exporter, kept deliberately instead of the newer `torch.export`-based default (a `DeprecationWarning`
+on recent torch versions), because that one needs an extra `onnxscript` dependency this project
+doesn't otherwise require, and the legacy exporter already verifies correctly (see
+`docs/experiments.md`'s Milestone 4 section for the actual PyTorch-vs-ONNX agreement numbers). Only
+the batch axis is dynamic; window length is fixed at export time, matching every other place in this
+repo that treats window length as a fixed config value.
+
+`ProductionInferenceModule` / `export_production_model` wrap this further for Member 2's genuine
+100 Hz production input (`src/inference/member2_interface.py`, `docs/production_100hz.md`): the
+exported graph takes `[B, 200, 6]` (2 s at 100 Hz) and decimates to the model's native `[B, 20, 6]`
+(10 Hz) inside the graph before running the same unchanged `InferenceModule`. This requires a
+`window=20` checkpoint and is exposed via `scripts/export_onnx.py --production`.
 
 `verify_shapes_and_finite` and `compare_pytorch_onnx` (also in `export_onnx.py`) are the two
 verification primitives `scripts/export_onnx.py` and `tests/test_inference.py` both build on: the

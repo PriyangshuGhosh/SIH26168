@@ -1,0 +1,45 @@
+{
+  "run": "cnn_mag_w20",
+  "selected_by": "validation MAE",
+  "arch": "cnn_mag",
+  "window": 20,
+  "n_parameters": 27650,
+  "receptive_field": 25,
+  "uncertainty": true,
+  "augmentation_policy": "yaw",
+  "loss": "nll",
+  "best_epoch": 18,
+  "epochs_run": 28,
+  "train_time_s": 182.34211444854736,
+  "eval_time_s": 1.6290051937103271,
+  "checkpoint": "experiments/production2_cnn_mag_w20/best.pt",
+  "device": "cuda",
+  "amp_dtype": "torch.bfloat16",
+  "model_cfg": {
+    "channels": 32,
+    "kernel_size": 5,
+    "n_blocks": 3,
+    "dropout": 0.1,
+    "uncertainty": true,
+    "log_var_min": -6.0,
+    "log_var_max": 6.0,
+    "derive_magnitude_channels": true
+  },
+  "evaluate_test": true,
+  "val": {
+    "n": 105676,
+    "mae_mps": 4.271745189261977,
+    "rmse_mps": 5.7732623009689314,
+    "r2": -0.037232153056169226,
+    "mae_kmh": 15.378282681343117,
+    "rmse_kmh": 20.783744283488154
+  },
+  "test": {
+    "n": 301580,
+    "mae_mps": 4.926536414860142,
+    "rmse_mps": 7.020391389688208,
+    "r2": -0.16838553380169508,
+    "mae_kmh": 17.735531093496512,
+    "rmse_kmh": 25.27340900287755
+  }
+}

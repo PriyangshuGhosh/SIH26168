@@ -5,6 +5,8 @@ on:
     paths:
       - "member5_engine/**"
       - "member2_alignment/**"
+      - "member3_fusion/**"
+      - "member4_map_matching/**"
       - "docs/member5/**"
       - "CMakeLists.txt"
       - ".github/workflows/member5.yml"
@@ -12,6 +14,8 @@ on:
     paths:
       - "member5_engine/**"
       - "member2_alignment/**"
+      - "member3_fusion/**"
+      - "member4_map_matching/**"
       - "docs/member5/**"
       - "CMakeLists.txt"
       - ".github/workflows/member5.yml"

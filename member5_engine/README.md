@@ -1,6 +1,10 @@
 # Member 5 — Edge Systems Engineer (`libidr_engine`)
 
-Thread-safe native orchestrator that hosts Member 2 frame alignment, Member 1 speed inference (ONNX or mock), Member 3 fusion (stub until EKF lands), Member 4 map matching (stub), and the GNSS deficit state machine. Member 6 talks only to the C ABI in `include/idr_engine_api.h`.
+Thread-safe native orchestrator:
+
+`raw IMU → Member 2 FrameAligner → Member 1 speed (ONNX, or explicit mock) → Member 3 EKF → Member 4 MapMatchingEngine (.roadpack) → C ABI`
+
+Member 6 talks only to `include/idr_engine_api.h`. There is no production `StubFusionEngine` or `StubMapMatcher`.
 
 ## Pipeline
 
@@ -10,13 +14,13 @@ idr_feed_imu (100 Hz, lock-free SPSC)
         v
  Member 2 FrameAligner
         |
-        +--> 2 s IMU window --> Member 1 speed (20 Hz stride)
+        +--> 2 s / 200-sample 100 Hz window --> Member 1 speed (stride 10)
         |
         v
- Member 3 fusion (stub EKF)  <--- idr_feed_gnss + deficit SM
+ Member 3 EKFFusionEngine  <--- idr_feed_gnss + deficit SM
         |
         v
- Member 4 map match (pass-through stub)
+ Member 4 MapMatchingEngine (offline .roadpack HMM)
         |
         v
 idr_get_current_state (poll ~10 Hz)
@@ -30,11 +34,21 @@ void idr_engine_shutdown(void);
 void idr_feed_imu(double t, double ax, double ay, double az, double gx, double gy, double gz);
 void idr_feed_gnss(double t, double lat, double lon, double alt, double speed, double hdop, int num_sats);
 IDRNavigationOutput idr_get_current_state(void);
+long long idr_get_road_segment_id(void);
+int idr_is_on_road_network(void);
 ```
 
-`idr_engine_init` returns **1 on success, 0 on failure** (same convention as the handbook stub).
+`idr_engine_init` returns **1 on success, 0 on failure**. On failure, `idr_engine_last_error()`.
 
-Units: IMU m/s² and rad/s (phone frame). GNSS WGS84 degrees, speed m/s. Heading in the output is **degrees**.
+Units: IMU m/s² and rad/s (phone frame). GNSS WGS84 degrees, speed m/s. Output heading is **degrees**. Matched lat/lon/heading/confidence come from Member 4 when the fix is on-network; segment id and on-road flag are extra C getters so the original `IDRNavigationOutput` layout is unchanged.
+
+## Production vs mock
+
+- **Map:** `map_db_path` must be an existing Member 4 `.roadpack`. GraphML/GeoJSON are offline **build** inputs (Python tools), not the C++ runtime format. Empty path, `mock:`, or a corrupt pack fails init.
+- **Speed:** production requires `speed_estimator.onnx` and a build with `-DIDR_WITH_ONNXRUNTIME=ON`. Missing model **fails init** (no silent mock).
+- **Explicit mock (tests/dev only):** `onnx_model_path` of `"mock"` / `"mock:..."`, or `SIH26168_ALLOW_MOCK_SPEED=1`.
+
+Default desktop builds in this repo often have **no ONNX Runtime linked**. End-to-end CTest therefore uses `"mock"` on purpose; that is labelled, not a production fallback.
 
 ## GNSS deficit state machine
 
@@ -44,7 +58,9 @@ Switch to dead reckoning when any of:
 - satellite count < 4
 - no GNSS update for 1.2 s of **IMU/sensor time**
 
-Quality failures update `is_dead_reckoning` on the calling thread (measured well under 10 ms on desktop; see `member5_benchmark`). Age-based outage is evaluated as IMU samples are processed.
+Quality failures update `is_dead_reckoning` on the calling thread. Age-based outage is evaluated as IMU samples are processed.
+
+Member 3 additionally gates GNSS measurement quality (stricter HDOP/sats inside the EKF). The deficit SM still owns the DR flag on the C ABI.
 
 ## Build (desktop)
 
@@ -53,67 +69,55 @@ From the repository root:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-ctest --test-dir build -R member5 --output-on-failure -C Release
+ctest --test-dir build -R 'member2|member3|member4|member5' --output-on-failure -C Release
+./build/member2_alignment/member2_benchmark
+./build/member5_engine/member5_benchmark
+./build/member5_engine/member5_synthetic_e2e
 ```
 
-Outputs:
+Linux output: `build/member5_engine/libidr_engine.so`
 
-- Windows: `build/member5_engine/Release/idr_engine.dll` (or `build/member5_engine/idr_engine.dll`)
-- Linux: `build/member5_engine/libidr_engine.so`
-
-Optional ONNX Runtime (Member 1 `speed_estimator.onnx`):
+Optional ONNX Runtime:
 
 ```bash
 cmake -S . -B build -DIDR_WITH_ONNXRUNTIME=ON -DIDR_ONNXRUNTIME_ROOT=/path/to/onnxruntime
 ```
 
-Without ONNX, the engine uses the handbook mock: `v = max(0, mean(a_x) * 2)`, variance `0.05 m²/s²`.
+Place Member 1’s exported graph at the path passed to `idr_engine_init`.
+
+**Member 1 live rate is 100 Hz.** The engine does **not** downsample aligned IMU. It packs
+`[T, 6]` time-major windows (`T` from the ONNX graph, default **200 = 2 s**) with channels
+`[ax, ay, az, gx, gy, gz]`. ONNX input `[B, T, 6]` (Member 1 `export_onnx.py`) is the default;
+`[B, 6, T]` (handbook) is detected and filled by transpose. Outputs follow the Member 1 contract
+(`velocity_mps`, `uncertainty` as sigma → variance for Member 3, `confidence`) and also accept
+handbook names `estimated_velocity` / `velocity_variance`.
+
+The in-tree `member1-ml` training config still documents a 10 Hz NPZ (`sample_rate_hz: 10.0`,
+windows 20/40). That is the **training-dataset** description. Production ingestion follows the
+**100 Hz** live contract (user + handbook 200-sample / 2 s window). A leftover 10 Hz-trained graph
+with T=20/40 would see 0.2/0.4 s of 100 Hz data — export a 100 Hz `speed_estimator.onnx` with T=200
+(or 400) before claiming numerical parity.
 
 ## Android NDK (`arm64-v8a`)
 
-Requires the Android NDK and a host CMake that can compile Member 2 (Eigen FetchContent needs network on first configure).
-
 ```bash
-cmake -S . -B build-android \
-  -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-  -DANDROID_ABI=arm64-v8a \
-  -DANDROID_PLATFORM=android-24 \
-  -DANDROID_STL=c++_shared \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DSIH26168_BUILD_MEMBER5=ON
-
-cmake --build build-android --target idr_engine -j
+export ANDROID_NDK=/path/to/ndk
+bash member5_engine/scripts/build_android_arm64.sh
 ```
 
-Copy `libidr_engine.so` plus `libc++_shared.so` into the Flutter/Kotlin `jniLibs/arm64-v8a/` folder. Header for FFI/JNI: `member5_engine/include/idr_engine_api.h`.
-
-This NDK path is **not device-benchmarked** in this delivery.
-
-## Integration notes
-
-- `idr_feed_imu` / `idr_feed_gnss` are safe from the sensor threads. IMU uses a lock-free SPSC ring (capacity 2048). Use **one producer thread per queue**.
-- Member 2 is not internally synchronized; the engine serializes `process` / `feedGnss` on the worker.
-- `map_db_path` is accepted now and reserved for Member 4. Empty string is valid; matcher is pass-through.
-- `onnx_model_path` is used only when `IDR_WITH_ONNXRUNTIME=ON` and the file exists; otherwise mock speed.
-- Swap `StubFusionEngine` / `StubMapMatcher` for real Member 3/4 classes without changing the C ABI.
+**ANDROID PERFORMANCE: NOT VALIDATED** (no device in this delivery). Cross-build only when NDK is present.
 
 ## Tests
 
 | Target | What it covers |
 |---|---|
-| `member5_cpp_tests` | SPSC ring, deficit SM, C ABI, GNSS quality + stale-time DR, <10 ms quality switch |
-| `member5_benchmark` | Mean `idr_feed_gnss` mode-switch latency |
+| `member5_cpp_tests` | SPSC, deficit SM, production error paths, C ABI, GNSS dropout, real M4 vs stub ids, M2→M3 contract |
+| `member5_benchmark` | GNSS mode-switch latency **and** 100 Hz pipeline feed timing (measured) |
 | `member5_demo` | Short IMU+GNSS smoke print |
-| `member5_synthetic_e2e` | Full-pipeline run on a synthetic 40 s tunnel drive; asserts DR entry/exit, drift, and map snap |
+| `member5_synthetic_e2e` | 30 s synthetic tunnel on `synthetic_grid.roadpack` with real M2/M3/M4 |
 
-`member5_synthetic_e2e` must run with the repository root as the working directory (CTest
-does this already) because it writes `member5_engine/tests/data/synthetic_e2e_log.csv`.
+CTest working directory is the repository root so the synthetic `.roadpack` resolves.
 
-## Stubs vs real modules
+## Threading
 
-| Slot | Current | Replace with |
-|---|---|---|
-| Member 1 | `MockSpeedEstimator` / optional ONNX | `speed_estimator.onnx` |
-| Member 2 | **Real** `FrameAligner` | — |
-| Member 3 | `StubFusionEngine` kinematic + NHC `v_y=0` | `EKFFusionEngine` |
-| Member 4 | `StubMapMatcher` pass-through | `MapMatchingEngine` |
+`idr_feed_imu` / `idr_feed_gnss` are safe from the sensor threads. IMU uses a lock-free SPSC ring (capacity 2048). One producer thread per queue. Member 2/3/4 run on the engine worker.

@@ -16,6 +16,10 @@ endif()
 
 add_subdirectory(member3_fusion)
 
+option(SIH26168_BUILD_MEMBER4 "Build Member 4 offline map matching" ON)
+if(SIH26168_BUILD_MEMBER4)
+  add_subdirectory(member4_map_matching)
+endif()
 
 if(SIH26168_BUILD_MEMBER5)
   if(NOT SIH26168_BUILD_MEMBER2)

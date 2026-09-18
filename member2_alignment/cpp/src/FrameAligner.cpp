@@ -159,10 +159,8 @@ AlignedIMUFrame FrameAligner::process(double timestamp,
     sensor_quality_ = valid_count_ > 0 ? static_cast<double>(ok_n) / static_cast<double>(valid_count_) : 0.0;
 
     if (!vr.ok) {
+        /* Reject this sample only. Do not latch INVALID on the estimator. */
         CalibrationStatus forced = CalibrationStatus::INVALID;
-        if (vr.hard_invalid) {
-            status_ = CalibrationStatus::INVALID;
-        }
         return emit(timestamp, acc, gyro, &forced);
     }
 

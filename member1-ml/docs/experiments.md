@@ -531,3 +531,181 @@ ablation axis into `results/ablation/`: window size (2 s vs 4 s), augmentation o
 window size and architecture), augmentation policy (none/so3/yaw/gravity_yaw, validation only, from Milestone
 3 phase 1), and loss (NLL vs point, validation only, from Milestone 3 phase 3). No new numbers are produced --
 see the milestone sections above for the numbers themselves and the reasoning behind each choice.
+
+## Post-milestone-4 addendum: production 100 Hz contract correction
+
+The project's production contract requires 100 Hz input consumed from Member 2's `AlignedIMUFrame` in a
+200-sample (2-second) causal window, and an output contract field named `velocity_variance_m2s2` (not
+`uncertainty`). Neither was true of Milestone 4's `m3_final_cnn_w40` deliverable (10 Hz-only input path,
+4-second window, `uncertainty`-named sigma field). Full writeup: `docs/production_100hz.md`,
+`docs/member1_output_contract.md`.
+
+Fix: an additive Member 2 interface adapter (`src/inference/member2_interface.py`) that decimates Member 2's
+genuine 100 Hz stream to the model's native 10 Hz resolution (no training data was fabricated), plus an
+output-field rename (`uncertainty` sigma -> `velocity_variance_m2s2` = sigma²). Because the 200-sample/2-second
+production window only decimates to a `window=20` model, a new checkpoint was trained at that window (the
+`m3_final_cnn_w40` checkpoint above, at `window=40`, cannot serve a 2-second production buffer without either
+retraining or a 400-sample buffer -- see `docs/production_100hz.md`).
+
+**Freshly retrained and evaluated on the untouched S-series test set, same seed (42), same `yaw` augmentation
+policy, same NLL loss as the table above:**
+
+| Checkpoint | Window | Val MAE | Test MAE | Test RMSE | Test R² |
+|---|---|---|---|---|---|
+| `m3_final_cnn_w40` (reconfirmed unchanged; this addendum's own retrain) | 40 | 4.124 m/s | 4.786 m/s | 6.662 m/s | -0.052 |
+| `production_cnn_w20` (new; serves the 100 Hz/200-sample production contract) | 20 | 4.364 m/s | 5.144 m/s | 7.249 m/s | -0.246 |
+
+The `m3_final_cnn_w40` row above was reproduced bit-for-bit against the numbers already in this document
+(Milestone 3's Phase 4 and Milestone 4's tables) by retraining with the identical config, seed and recipe --
+confirming the production-contract fix did not silently change the existing, unchanged evaluation path. The
+`production_cnn_w20` row is a genuinely new number, **worse** than `m3_final_cnn_w40` (test MAE +0.358 m/s,
+~7.5% relative) -- the real, measured cost of matching the contract's literal 2-second window instead of the
+4-second window Milestone 3 selected for best validation accuracy. This is not hidden: see
+`docs/production_100hz.md` and the top-level `README.md` for both numbers side by side.
+
+Both checkpoints' negative R² on this test split were already true before this change (see Milestone 3/4
+above) -- the production checkpoint is not newly failing a bar the w40 model passed.
+
+## Post-milestone-4 addendum #2: production accuracy-improvement pass
+
+Focused ablation to reduce `production_cnn_w20`'s test MAE (5.144 m/s) while keeping the exact
+production contract (window=20, 100 Hz Member 2 interface, output schema) unchanged. Protocol: seed 42
+throughout; validation MAE selects candidates; the S-series test set is touched only once, for the
+final selected candidate (see the note on C2/C3 below, which is the one place this session's actual
+practice fell short of that rule).
+
+### Diagnostic: target/IMU synchronization (checked before touching any preprocessing)
+
+Cross-correlated `d(speed)/dt` (a finite-difference proxy) against each of the 6 IMU channels, per
+session, over lags of ±10 samples. Correlations were weak (`|r| < 0.32` even at the best lag) and the
+best lag was inconsistent across sessions (from -10 to +10, no common sign or magnitude) -- the
+signature of unknown, per-trip phone mounting orientation (already documented,
+`docs/data_protocol.md`), not a systematic timing/synchronization offset, which would show a
+consistent lag across sessions. **No evidence of a synchronization bug; no preprocessing change made
+on this basis.**
+
+### Candidates (window=20 throughout; C0 is the pre-existing production baseline)
+
+| id | architecture | loss | augmentation | features | params | val MAE | test MAE* | notes |
+|---|---|---|---|---|---|---|---|---|
+| C0 | cnn | nll | yaw | raw 6ch | 27,266 | 4.364 | 5.144 | baseline (`production_cnn_w20`) |
+| C1 | tcn | nll | yaw | raw 6ch | 22,914 | 4.610 | -- | cited from the Phase 2 matrix above, not retrained (worse on val; test never touched) |
+| C2 | cnn | huber (point, no uncertainty head) | yaw | raw 6ch | ~27,200 | 4.882 | 5.426 | worse; point loss clearly hurts at w20 (unlike w40, see Phase 3) |
+| C3 | cnn | nll | none | raw 6ch | 27,266 | 4.656 | 5.525 | worse; confirms yaw augmentation still helps at w20 |
+| C4 | cnn (channels=48) | nll | yaw | raw 6ch | 60,098 | 4.508 | not evaluated | worse despite 2.2x the parameters -- w20's accuracy ceiling isn't a capacity limit |
+| **C5** | **cnn** | **nll** | **yaw** | **raw 6ch + `\|acc\|`/`\|gyr\|`** | **27,650** | **4.313** | **5.072** | **selected; `production_cnn_mag_w20`** |
+
+\* C2 and C3 were run through `scripts/run_training.py`'s default CLI, which evaluates the test split
+unconditionally -- their test MAE is reported above for transparency, but was **not** used to select or
+rule out either candidate: both were already clearly worse than C0 on validation alone before their
+test numbers existed. C4 and C5 were run with `evaluate_test=False` explicitly, so test was genuinely
+untouched during their selection; C5 (the winner) was evaluated on test exactly once, after selection,
+matching the intended protocol. This inconsistency is recorded here rather than glossed over.
+
+C1's TCN-vs-CNN comparison, C2's point-vs-NLL-loss comparison and C3's yaw-vs-none-augmentation
+comparison reproduce the same qualitative conclusions the Phase 2/3 milestone-3 matrix already reached
+for window=40 (CNN beats TCN; augmentation helps; see above) -- at window=20 the loss-choice effect is
+much larger (C2 costs 0.52 m/s val MAE vs. Phase 3's 0.03 m/s at w40), consistent with a shorter window
+giving the heteroscedastic NLL objective less signal to separate "hard" from "easy" windows, so point
+loss overfits harder here.
+
+### Why C5 (magnitude channels) won
+
+`docs/data_protocol.md` already documents that this dataset's phone mounting orientation is unknown and
+inconsistent across trips -- the reason `yaw` augmentation exists at all. Per-axis accelerometer/gyro
+values are therefore not directly comparable across sessions, but `|acc|` and `|gyr|` (vector norms)
+are rotation-invariant by construction: the model does not have to learn that invariance from limited
+data (only ~61k training windows), because it is given directly, at essentially zero parameter cost
+(384 extra weights, all in the first conv layer). C0-C4 all operate purely on the per-axis raw signal
+and/or vary capacity/loss/augmentation, none of which address this. Implementation: `test_magnitude_channels_are_rotation_invariant` (`tests/test_training.py`) checks the derived channels
+are exactly rotation-invariant; `test_production_onnx_works_end_to_end_with_magnitude_channel_model`
+(`tests/test_inference.py`) checks the production ONNX path still round-trips correctly with them.
+
+### Final result (test set touched once, after selection)
+
+| checkpoint | val MAE | test MAE | test RMSE | test R² | Δ test MAE vs. C0 |
+|---|---|---|---|---|---|
+| `production_cnn_w20` (C0, superseded) | 4.364 | 5.144 | 7.249 | -0.246 | -- |
+| `production_cnn_mag_w20` (C5, **current production**) | 4.313 | 5.072 | 7.240 | -0.242 | **-0.072 m/s (-1.4%)** |
+
+A real, reproducible, but modest improvement -- not a dramatic one. R² is still negative (barely
+changed: -0.242 vs -0.246); this model still explains less test-set variance than predicting the mean
+would, same as every window=20/40 model in this document. The unseen-group diagnostic (Vfa01/Vta1a/
+Vta1b/Y1, never used for training/validation/model-selection) also improved: MAE 5.020 m/s vs C0's
+5.187 m/s. Nothing here is claimed to close the gap with `m3_final_cnn_w40` (4.786 m/s test MAE) --
+that gap is the documented cost of the contract's 2-second window (see the addendum above), and this
+accuracy-improvement pass did not attempt to change the window length, which is fixed by the production
+contract.
+
+`production_cnn_w20`'s artifacts (checkpoint config, history, metrics, ONNX exports) are kept on disk
+and referenced above rather than deleted, so this comparison remains reproducible.
+
+## Post-milestone-4 addendum #3: error analysis and a second accuracy improvement
+
+Continuation of addendum #2, starting from `production_cnn_mag_w20` (test MAE 5.072 m/s). Same
+protocol: seed 42, validation selects candidates, test touched once for the final selection.
+
+### Error breakdown of `production_cnn_mag_w20` on the S-series test set
+
+| breakdown | worst segment | MAE there | best segment | MAE there |
+|---|---|---|---|---|
+| speed bin | [30, inf) m/s (n=2,277) | 26.4 | [0, 0.5) m/s (n=37,248) | 0.50 |
+| by trip | S3c (n=37,158) | 8.39 | S4 (n=87,771) | 3.68 |
+| turning (\|gyr_z\| at prediction point) | sharp turn >=0.6 rad/s (n=47) | 8.32 | straight <0.1 rad/s (n=291,153) | 5.06 |
+| accel/braking (Δspeed over 0.3 s) | hard brake <-1 m/s (n=562) | 5.92 | accelerating [0.2,1) m/s (n=48,711) | 4.07 |
+
+Per-sample MAE is worst at high speed and during sharp turns, as expected -- but **contribution to
+overall MAE is dominated by volume, not by these worst-per-sample segments**: weighting each speed
+bin's MAE by its share of the 301,580 test windows, the [5,10) and [10,15) m/s bins alone account for
+~67% of the total 5.072 m/s MAE (1.89 + 1.51 m/s of the 5.07 total), while the rare >=25 m/s tail
+(2.5% of windows) accounts for only ~9%. Turning and braking/acceleration events are both too rare
+(<0.1% and ~0.3% of windows respectively for the "sharp"/"hard" buckets) to materially move the
+overall number either way, and braking/accelerating windows are not markedly worse than steady-state
+cruising. **Conclusion: the dominant error source is systematic underperformance in the common
+5-15 m/s cruising range (58% of all test windows), not rare extreme-speed, turning or braking
+events.** This is consistent with all R² values in this document being negative: a 2-second IMU-only
+window carries a weak, easily-overfit signal for absolute cruising speed once a vehicle isn't actively
+accelerating or braking (raw acceleration/gyro data doesn't distinguish "steady 8 m/s" from "steady
+14 m/s" the way it distinguishes "accelerating" from "braking"), and this generalizes poorly to the
+held-out S-series vehicles/trips.
+
+### Candidate: longer heteroscedastic-NLL warmup
+
+Hypothesis: heteroscedastic NLL training can reduce its own objective either by fitting the mean more
+accurately *or* by predicting a larger variance for hard-to-fit inputs -- both lower the per-sample
+NLL term. For the common, hard-to-fit cruising-speed windows identified above, the model may be taking
+the "predict more uncertainty" path instead of the "fit harder" path. `training.nll_warmup_epochs`
+controls how many initial epochs train the mean head alone (point loss) before the variance head
+starts receiving gradient and this trade-off becomes available; lengthening it gives the mean head
+more chance to fit those regions first.
+
+| `nll_warmup_epochs` | val MAE | val RMSE | val R² | note |
+|---|---|---|---|---|
+| 3 (previous default, gen. 2) | 4.313 | 5.855 | -0.067 | `production_cnn_mag_w20` |
+| **10** | **4.272** | **5.773** | **-0.037** | **selected; `production2_cnn_mag_w20`** |
+| 15 | 4.334 | 6.114 | -0.163 | worse than both 3 and 10 |
+
+Non-monotonic (10 beats both 3 and 15), so this is a genuine optimum found with 3 validation-only runs,
+not the first improvement stopped at. No architecture or feature change; zero extra parameters; the
+window=40 training recipe and every other config are untouched (`nll_warmup_epochs` was overridden
+only for this window=20 run via the new `--nll-warmup-epochs` CLI flag on `scripts/run_training.py`).
+
+### Final result (test set touched once, after selection)
+
+| checkpoint | val MAE | test MAE | test RMSE | test R² | Δ test MAE vs. gen. 2 |
+|---|---|---|---|---|---|
+| `production_cnn_mag_w20` (gen. 2, superseded) | 4.313 | 5.072 | 7.240 | -0.242 | -- |
+| `production2_cnn_mag_w20` (gen. 3, **current production**) | 4.272 | **4.927** | **7.020** | **-0.168** | **-0.145 m/s (-2.9%)** |
+
+Combined with addendum #2's magnitude-channel change, the full chain from the original production
+baseline is 5.144 -> 5.072 -> **4.927 m/s** (-4.2% total), closing most of the way to
+`m3_final_cnn_w40`'s 4.786 m/s despite the window=20 constraint (down from an ~7.5% gap to ~3%). The
+unseen-group diagnostic also improved further: MAE 4.899 m/s (gen. 3) vs 5.020 m/s (gen. 2) vs
+5.187 m/s (gen. 1). R² is still negative -- this pass did not, and does not claim to, fix the
+underlying cruising-speed information limitation identified above; it only reduced how much that
+limitation costs in MAE. No further well-justified candidate was found this pass beyond the NLL-warmup
+change; further gains likely require either more/varied training data (more vehicles, more genuine
+speed variety at cruising speeds) or a longer window than the contract allows, neither of which is
+addressable within this pass's constraints.
+
+Both superseded checkpoints' artifacts are kept on disk and referenced above, not deleted.

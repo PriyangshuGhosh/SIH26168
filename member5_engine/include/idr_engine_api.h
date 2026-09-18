@@ -38,9 +38,14 @@ IDR_API void idr_feed_gnss(double timestamp, double lat, double lon, double alt,
 /* Polled by the mobile UI at ~10 Hz. */
 IDR_API IDRNavigationOutput idr_get_current_state(void);
 
-/* Diagnostics (stable extras; Member 6 may ignore). */
+/* Diagnostics (stable extras; Member 6 may ignore). Struct layout of
+   IDRNavigationOutput is unchanged so existing FFI stays valid.
+   Matched lat/lon/heading/confidence are in idr_get_current_state(). */
 IDR_API const char* idr_engine_last_error(void);
 IDR_API int idr_engine_is_initialized(void);
+IDR_API long long idr_get_road_segment_id(void);
+IDR_API int idr_is_on_road_network(void);
+IDR_API const char* idr_engine_speed_backend(void);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,100 @@
+{
+  "checkpoint": "experiments\\production_cnn_mag_w20\\final.pt",
+  "onnx_path": "experiments\\production_cnn_mag_w20\\final.production.onnx",
+  "arch": "cnn_mag",
+  "native_window": 20,
+  "production_raw_window": 200,
+  "decimation_factor": 10,
+  "augmentation_policy": "yaw",
+  "uncertainty": true,
+  "opset": 17,
+  "shape_and_finite_check": {
+    "1": {
+      "velocity_mps": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          1
+        ],
+        "finite": true
+      }
+    },
+    "8": {
+      "velocity_mps": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          8
+        ],
+        "finite": true
+      }
+    },
+    "64": {
+      "velocity_mps": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      },
+      "velocity_variance_m2s2": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      },
+      "confidence": {
+        "shape": [
+          64
+        ],
+        "finite": true
+      }
+    }
+  },
+  "value_range_check": {
+    "velocity_nonnegative": true,
+    "variance_positive": true,
+    "confidence_in_0_1": true
+  },
+  "pytorch_vs_onnx_synthetic": {
+    "velocity_mps": {
+      "max_abs_diff": 2.86102294921875e-06,
+      "allclose": true
+    },
+    "velocity_variance_m2s2": {
+      "max_abs_diff": 9.5367431640625e-06,
+      "allclose": true
+    },
+    "confidence": {
+      "max_abs_diff": 5.960464477539063e-08,
+      "allclose": true
+    }
+  },
+  "note": "Verified only against synthetic 100 Hz-shaped random input. No genuine 100 Hz IMU recording exists in this repo to validate the production graph against real data -- see docs/production_100hz.md. Accuracy of decimated-100Hz production inference has NOT been measured against real 100 Hz data.",
+  "benchmark": {
+    "pytorch_cpu_latency_ms_default_threading": 2.16203349999887,
+    "pytorch_cpu_latency_ms_single_threaded": 0.8441690000017843,
+    "onnx_cpu_latency_ms_default_threading": 0.19466900000224996,
+    "onnx_cpu_latency_ms_single_threaded": 0.1174419999915699,
+    "onnx_model_size_kb": 133.109375
+  }
+}

@@ -48,3 +48,5 @@ auto out = aligner.process(t, ax_p, ay_p, az_p, gx_p, gy_p, gz_p);
 ```
 
 See `docs/member2/` for conventions, algorithm, confidence semantics, and Member 1/3/5 handoff.
+
+C++ tests cover 100 Hz streams, jitter, dropped samples, duplicates, out-of-order timestamps, invalid samples, long-stream determinism, and Member 1 **100 Hz** window packing (`[T=200, 6]` over 2 s, no downsample). Recorded-phone accuracy remains **NOT VALIDATED** until a log is placed in `tests/data/recorded/`. Desktop `member2_benchmark` measures per-frame time; Android is **NOT VALIDATED**.

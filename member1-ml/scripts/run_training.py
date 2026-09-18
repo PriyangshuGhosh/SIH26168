@@ -61,7 +61,8 @@ def run_one(cfg: dict[str, Any], data: PreparedData, arch: str, window: int, end
     model_cfg = cfg["models"][arch]
     model = build_model(arch, model_cfg)
     # normalisation fitted on training rows / training labels only
-    model.set_normalization(*fit_normalization(subsets["train"].imu, y["train"]))
+    model.set_normalization(*fit_normalization(subsets["train"].imu, y["train"],
+                                               derive_magnitude_channels=model_cfg.get("derive_magnitude_channels", False)))
     n_params = count_parameters(model)
     print(f"\n--- {arch.upper()} | window {window} ({window / cfg['data']['sample_rate_hz']:g} s) | {n_params} parameters | "
           f"receptive field {model.receptive_field} | uncertainty={model.uncertainty} | device {device} ---")
@@ -135,6 +136,7 @@ def main() -> int:
     parser.add_argument("--archs", nargs="+", default=None)
     parser.add_argument("--windows", nargs="+", type=int, default=None)
     parser.add_argument("--max-epochs", type=int, default=None, help="override training.max_epochs (e.g. smoke runs)")
+    parser.add_argument("--nll-warmup-epochs", type=int, default=None, help="override training.nll_warmup_epochs (loss: nll only)")
     parser.add_argument("--device", default=None, help="override training.device")
     parser.add_argument("--tag", default="m2", help="prefix for experiment directories")
     parser.add_argument("--augmentation", choices=list(AUGMENTATION_POLICIES), default=None,
@@ -148,6 +150,8 @@ def main() -> int:
     cfg = load_config(args.config)
     if args.max_epochs is not None:
         cfg["training"]["max_epochs"] = args.max_epochs
+    if args.nll_warmup_epochs is not None:
+        cfg["training"]["nll_warmup_epochs"] = args.nll_warmup_epochs
     if args.device is not None:
         cfg["training"]["device"] = args.device
     if args.no_so3:

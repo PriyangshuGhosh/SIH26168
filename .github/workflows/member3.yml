@@ -1,0 +1,27 @@
+name: Member 3 tests
+
+on:
+  push:
+    paths:
+      - "member3_fusion/**"
+      - "member2_alignment/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member3.yml"
+  pull_request:
+    paths:
+      - "member3_fusion/**"
+      - "member2_alignment/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/member3.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j2
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure

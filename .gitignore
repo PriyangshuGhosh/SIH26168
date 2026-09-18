@@ -11,3 +11,6 @@ member2_alignment/tests/data/generated/*.csv
 !member2_alignment/tests/data/generated/.gitkeep
 member5_engine/tests/data/*.csv
 third_party/eigen/
+member4_map_matching/data/*.sqlite
+member4_map_matching/data/small_road_network.roadpack
+member4_map_matching/data/*.png

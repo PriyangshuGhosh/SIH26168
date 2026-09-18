@@ -37,6 +37,12 @@ The vision/depth track is integrated experimentally across Members 3, 5, and 6 a
 Implemented under [`member2_alignment/`](member2_alignment/README.md). Documentation:
 [`docs/member2/`](docs/member2/README.md).
 
+## Member 4 (offline HMM map matching)
+
+Implemented under [`member4_map_matching/`](member4_map_matching/README.md). Documentation:
+[`docs/member4/`](docs/member4/README.md). Handoff for Members 5/6:
+[`docs/member4/INTEGRATION.md`](docs/member4/INTEGRATION.md).
+
 ## Member 5 (native IDR engine)
 
 Implemented under [`member5_engine/`](member5_engine/README.md). C ABI for Member 6:
@@ -47,8 +53,11 @@ Binding notes: [`docs/member5/INTEGRATION.md`](docs/member5/INTEGRATION.md).
 
 ```bash
 python3 -m pip install -r member2_alignment/requirements.txt
+python3 -m pip install -r member4_map_matching/requirements.txt
+python3 member4_map_matching/python/tools/build_synthetic_graph.py
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ctest --test-dir build --output-on-failure
+PYTHONPATH=member4_map_matching/python python3 -m pytest member4_map_matching/tests/python -q
 ```
 
