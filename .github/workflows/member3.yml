@@ -19,9 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --disable-pip-version-check pytest numpy
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=$PWD/.venv/bin/python
       - name: Build
         run: cmake --build build -j2
       - name: CTest
         run: ctest --test-dir build --output-on-failure
+      - name: Member 3 benchmark
+        run: ./build/member3_fusion/member3_benchmark
