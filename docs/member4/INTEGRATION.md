@@ -49,8 +49,13 @@ Suggested Member 5 wiring (implemented):
 | `*.sqlite` (R-tree) | `build_road_database.py` | Python spatial queries |
 | `*.roadpack` | `build_road_database.py` / `build_synthetic_graph.py` | **C++ runtime** |
 
-`idr_engine_init(map_db_path, ...)` may point at a `.roadpack` file. Runtime
-does not require internet or OSMnx.
+`idr_engine_init` may point at a `.roadpack` **or** a `maps/manifest.json` catalog.
+Member 6 selects the region that contains the current GNSS fix (`idr_select_map_for_location`).
+If the user is outside every provisioned region, the matcher must not snap to a distant city:
+`is_on_road_network = false` and the unsnapped navigation position is preserved.
+Runtime does not require internet or OSMnx.
+
+Road-network matching data (`.roadpack`) is not the same as map rendering tiles (MBTiles / style JSON).
 
 ## Member 6
 

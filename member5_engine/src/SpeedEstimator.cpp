@@ -26,17 +26,24 @@ SpeedEstimate MockSpeedEstimator::predict(const float* samples_t6, int n_samples
     }
     double sum_ax = 0.0;
     double tail_ax = 0.0;
+    double sum_gyro = 0.0;
     const int tail = std::min(n_samples, 5);
     for (int i = 0; i < n_samples; ++i) {
         const double ax = static_cast<double>(samples_t6[i * 6 + 0]);
         sum_ax += ax;
+        sum_gyro += std::abs(static_cast<double>(samples_t6[i * 6 + 5]));
         if (i >= n_samples - tail) {
             tail_ax += ax;
         }
     }
     constexpr double kInferDt = 0.10; /* engine stride 10 at 100 Hz */
-    if (!have_v_) {
-        v_mps_ = static_cast<float>(std::max(0.0, (sum_ax / n_samples) * kInferDt));
+    const double mean_ax = sum_ax / n_samples;
+    const double mean_gyro = sum_gyro / n_samples;
+    if (std::abs(mean_ax) < 0.35 && mean_gyro < 0.15) {
+        v_mps_ = 0.0f;
+        have_v_ = true;
+    } else if (!have_v_) {
+        v_mps_ = static_cast<float>(std::max(0.0, mean_ax * kInferDt));
         have_v_ = true;
     } else {
         const double ax_tail = tail_ax / static_cast<double>(tail);

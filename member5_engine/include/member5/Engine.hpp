@@ -5,7 +5,9 @@
 #include "member3/EKFFusionEngine.hpp"
 #include "member4/MapMatchingEngine.hpp"
 #include "member5/GnssDeficitMachine.hpp"
+#include "member5/MapCatalog.hpp"
 #include "member5/SpeedEstimator.hpp"
+#include "member5/SpeedValidity.hpp"
 #include "member5/SpscRing.hpp"
 
 #include <array>
@@ -52,6 +54,14 @@ public:
     const char* speedBackend() const { return backend_name_.c_str(); }
     std::uint64_t droppedImu() const { return dropped_imu_.load(std::memory_order_relaxed); }
 
+    int selectMapForLocation(double lat, double lon);
+    int mapCoversLocation(double lat, double lon) const;
+    const char* activeMapRegionId() const;
+    const char* mapStatusMessage() const;
+    const char* speedRejectReason() const;
+    IDRDiagnostics diagnostics() const;
+    int speedIsValid() const;
+
     static bool mockSpeedRequested(const char* onnx_model_path);
 
 private:
@@ -68,6 +78,8 @@ private:
     void publishLocked();
     bool loadMap(const char* map_db_path);
     bool loadSpeed(const char* onnx_model_path);
+    bool applyRoadpack(const std::string& path);
+    void noteImuRate(double timestamp);
 
     SpscRing<ImuSample, 2048> imu_q_;
     SpscRing<GnssSample, 128> gnss_q_;
@@ -78,6 +90,10 @@ private:
     sih26168::member3::EKFFusionEngine fusion_;
     sih26168::member4::MapMatchingEngine matcher_;
     GnssDeficitMachine deficit_;
+    MapCatalog catalog_;
+    SpeedValidityFilter speed_guard_;
+    SpeedValidityFilter ai_guard_;
+    SpeedValidityConfig speed_cfg_{};
 
     std::array<float, kMaxT * kChannels> window_{};
     int window_count_{0};
@@ -86,14 +102,31 @@ private:
 
     mutable std::mutex state_mu_;
     IDRNavigationOutput output_{};
+    IDRDiagnostics diagnostics_{};
     std::int64_t road_segment_id_{0};
     int is_on_road_{0};
+    int speed_valid_{0};
+    std::string speed_reject_;
+    std::string active_region_id_;
+    std::string map_status_;
+    MapCoverage map_coverage_{MapCoverage::Unknown};
+    double last_ai_speed_{0.0};
+    double last_gnss_speed_{0.0};
+    double last_ekf_speed_{0.0};
+    double last_imu_t_{0.0};
+    double last_gnss_t_{0.0};
+    double imu_hz_{0.0};
+    double imu_rate_t_{0.0};
+    int imu_rate_n_{0};
+    int last_ai_accepted_{0};
+    int last_cal_status_{0};
 
     std::atomic<bool> running_{false};
     std::thread worker_;
     std::string backend_name_;
     std::string last_error_;
     bool using_mock_speed_{false};
+    bool catalog_mode_{false};
 };
 
 }  // namespace sih26168::member5

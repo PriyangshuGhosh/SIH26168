@@ -128,6 +128,37 @@ void MapMatchingEngine::reset() {
     window_candidates_.clear();
 }
 
+bool MapMatchingEngine::geographicBounds(
+    double& min_lat, double& max_lat, double& min_lon, double& max_lon) const {
+    if (segments_.empty()) {
+        return false;
+    }
+    min_lat = segments_.front().min_lat;
+    max_lat = segments_.front().max_lat;
+    min_lon = segments_.front().min_lon;
+    max_lon = segments_.front().max_lon;
+    for (const auto& s : segments_) {
+        min_lat = std::min(min_lat, s.min_lat);
+        max_lat = std::max(max_lat, s.max_lat);
+        min_lon = std::min(min_lon, s.min_lon);
+        max_lon = std::max(max_lon, s.max_lon);
+    }
+    return true;
+}
+
+bool MapMatchingEngine::coversLocation(double lat, double lon, double margin_m) const {
+    double min_lat = 0.0, max_lat = 0.0, min_lon = 0.0, max_lon = 0.0;
+    if (!geographicBounds(min_lat, max_lat, min_lon, max_lon) || !std::isfinite(lat) ||
+        !std::isfinite(lon)) {
+        return false;
+    }
+    const double dlat = margin_m / 111320.0;
+    const double dlon =
+        margin_m / (111320.0 * std::max(std::cos(lat * kPi / 180.0), 1e-6));
+    return lat >= min_lat - dlat && lat <= max_lat + dlat && lon >= min_lon - dlon &&
+           lon <= max_lon + dlon;
+}
+
 double MapMatchingEngine::positionSigma(const member3::NavigationState& nav) {
     const double c00 = nav.position_cov_m2[0][0];
     const double c11 = nav.position_cov_m2[1][1];
@@ -155,8 +186,9 @@ double MapMatchingEngine::angularDiff(double a, double b) {
 }
 
 double MapMatchingEngine::searchRadius(
-    const member3::NavigationState& nav, double base) {
-    return std::min(120.0, std::max(base, 3.0 * positionSigma(nav)));
+    const member3::NavigationState& nav, double base) const {
+    const double cap = std::max(config_.max_search_radius_m, 1.0);
+    return std::min(cap, std::max(base, 3.0 * positionSigma(nav)));
 }
 
 void MapMatchingEngine::projectPointToSegment(

@@ -35,7 +35,7 @@ The process covariance uses the standard continuous white-acceleration discretiz
 ## Measurement updates and gates
 
 - GNSS position is a 2-D local North/East measurement. The innovation covariance is `S = HPHᵀ + R`; a configurable Mahalanobis/NIS gate defaults to the 95% chi-square threshold 5.991.
-- GNSS speed and AI speed measure forward velocity `v_x` and use scalar NIS gating with default threshold 3.841. GNSS speed is independently usable even if the position innovation is rejected.
+AI speed is gated by NIS **and** `max_vehicle_speed_mps` (default 55 m/s, a configurable passenger-road demo bound, not a physical law). Variance is floored at `min_speed_variance_m2s2`. A 194.4 m/s (~700 km/h) AI sample against a ~2 m/s navigation state is rejected; the filter does not jump. If inertial velocity diverges beyond the configured bound, velocity states are recovered (reset) and covariance is inflated.
 - GNSS position uncertainty is estimated as `max(position_sigma_floor, HDOP × gnss_hdop_to_sigma_m)`. The conversion factor is explicitly configurable because HDOP is dimensionless and the current GNSS input contract does not expose receiver covariance.
 - NHC is the probabilistic measurement `v_y = 0`, applied only when Member 2 reports `FULLY_ALIGNED`.
 - Measurement updates use Joseph covariance form. GNSS position uses LDLT solves rather than explicit matrix inversion.
