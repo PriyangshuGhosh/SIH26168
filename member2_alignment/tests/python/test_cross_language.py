@@ -59,11 +59,18 @@ def _find_csv_aligner() -> Path | None:
     candidates = [
         ROOT / "build" / "member2_alignment" / "member2_csv_aligner",
         ROOT / "build" / "member2_csv_aligner",
+        ROOT / "build-reconcile" / "member2_alignment" / "member2_csv_aligner",
+        ROOT / "build-ort" / "member2_alignment" / "member2_csv_aligner",
     ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return None
+    found = [c for c in candidates if c.exists()]
+    found.extend(
+        p
+        for p in ROOT.glob("build*/member2_alignment/member2_csv_aligner")
+        if p.is_file() and p not in found
+    )
+    if not found:
+        return None
+    return max(found, key=lambda p: p.stat().st_mtime)
 
 
 @pytest.mark.parametrize("name", ["gnss_assisted", "stationary_phone", "straight_acceleration"])

@@ -56,8 +56,9 @@ phone, which fixes roll and pitch relative to vehicle Z — **not** yaw about Z.
 
 Yaw is the remaining rotation about vehicle/levelled Z. It is observable only when
 a unique **longitudinal** axis can be inferred (sustained forward/brake specific
-force, with optional GNSS `dv/dt` for sign, and optional turn consistency to
-resolve 180°). Potholes, vibration, and generic gyro energy are not heading.
+force, with optional GNSS `dv/dt` for sign **only when |a_h| agrees with |dv/dt|**,
+and optional turn consistency to resolve 180°). Potholes, vibration, lane changes,
+and generic gyro energy are not heading. GNSS course is unused.
 
 ## Units and time
 

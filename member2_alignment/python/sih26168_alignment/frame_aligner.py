@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+import math
 
 import numpy as np
 
@@ -96,7 +97,8 @@ class FrameAligner:
             dt = aid.timestamp - self._gnss_t_prev
             if 0.005 <= dt <= 1.0:
                 raw = (aid.speed_mps - float(self._gnss_speed_prev)) / dt
-                self._gnss_accel = 0.3 * raw + 0.7 * self._gnss_accel
+                if np.isfinite(raw) and abs(raw) <= self.cfg.gnss_max_abs_accel:
+                    self._gnss_accel = 0.3 * raw + 0.7 * self._gnss_accel
         self._gnss_speed_prev = aid.speed_mps
         self._gnss_t_prev = aid.timestamp
 
@@ -197,12 +199,12 @@ class FrameAligner:
         if np.max(np.var(acc, axis=0)) > self.cfg.static_accel_var_max:
             return False
         if self._g_initialized and self._g_up_p is not None:
-            mean_a = safe_normalize(np.mean(acc, axis=0))
-            if vector_norm(mean_a) < 1e-9:
-                return False
-            ang = float(np.arccos(np.clip(np.dot(mean_a, self._g_up_p), -1.0, 1.0)))
-            if ang > self.cfg.static_dir_align_rad:
-                return False
+            ghat = self._g_up_p
+            min_dot = float(np.cos(self.cfg.static_dir_align_rad))
+            for row in acc:
+                an = safe_normalize(row)
+                if vector_norm(an) < 1e-9 or float(np.dot(an, ghat)) < min_dot:
+                    return False
         if self._t_hist[-1] - self._t_hist[0] < 0.5 * self.cfg.min_static_duration_s:
             return False
         return self._static_streak_s + self.cfg.nominal_dt() >= 0.5 * self.cfg.min_static_duration_s or n >= self.cfg.static_window_samples
@@ -280,7 +282,7 @@ class FrameAligner:
         R_gp = rotation_gravity_up_to_vehicle_z(self._g_up_p)
         return R_gp @ acc_p
 
-    def _gnss_usable(self, t: float) -> bool:
+    def _gnss_quality_ok(self, t: float) -> bool:
         g = self._gnss
         if g is None:
             return False
@@ -288,9 +290,26 @@ class FrameAligner:
             return False
         if g.hdop > self.cfg.gnss_max_hdop or g.num_sats < self.cfg.gnss_min_sats:
             return False
-        if g.speed_mps < 0.0 or not np.isfinite(g.speed_mps):
+        if g.speed_mps < 0.0 or not np.isfinite(g.speed_mps) or not np.isfinite(g.hdop):
             return False
         return True
+
+    def _accel_magnitudes_agree(self, a_h_n: float, gnss_abs: float) -> bool:
+        hi = max(a_h_n, gnss_abs)
+        lo = min(a_h_n, gnss_abs)
+        if hi < 1e-9:
+            return False
+        return (hi <= lo * (1.0 + self.cfg.gnss_imu_agree_rel)) and ((hi - lo) <= self.cfg.gnss_imu_agree_abs)
+
+    def _gnss_sign_ready(self, t: float, a_h_n: float) -> bool:
+        if not self._gnss_quality_ok(t):
+            return False
+        if self._gnss.speed_mps < self.cfg.gnss_min_speed_mps:
+            return False
+        mag = abs(self._gnss_accel)
+        if mag < self.cfg.gnss_min_accel or mag > self.cfg.gnss_max_abs_accel:
+            return False
+        return self._accel_magnitudes_agree(a_h_n, mag)
 
     def _update_yaw(self, t: float, acc_p: np.ndarray, gyro_p: np.ndarray, dt: float) -> None:
         R_gp = rotation_gravity_up_to_vehicle_z(self._g_up_p)
@@ -306,14 +325,18 @@ class FrameAligner:
 
         straight = gyro_n < self.cfg.yaw_max_gyro_norm
         if straight and a_h_n >= self.cfg.yaw_min_horiz_accel:
-            outer = np.outer(a_h, a_h)
-            self._scatter += outer * dt
-            self._axis_evidence += a_h_n * dt
-            if self._gnss_usable(t) and abs(self._gnss_accel) >= self.cfg.gnss_min_accel:
-                # Speed increasing => horizontal specific force is forward.
-                self._signed_sum += np.sign(self._gnss_accel) * a_h * dt
-                self._gnss_sign_evidence += abs(self._gnss_accel) * dt
-            self._last_yaw_update_t = t
+            gnss_watch = self._gnss_quality_ok(t) and self._gnss.speed_mps >= self.cfg.gnss_min_speed_mps
+            gnss_sign_ok = self._gnss_sign_ready(t, a_h_n)
+            skip_non_long = gnss_watch and not gnss_sign_ok
+            if not skip_non_long:
+                outer = np.outer(a_h, a_h)
+                self._scatter += outer * dt
+                self._axis_evidence += a_h_n * dt
+                if gnss_sign_ok:
+                    sgn = 1.0 if self._gnss_accel >= 0.0 else -1.0
+                    self._signed_sum += sgn * a_h * dt
+                    self._gnss_sign_evidence += abs(self._gnss_accel) * dt
+                self._last_yaw_update_t = t
 
         # Turn-based 180° disambiguation only after an axis exists.
         axis = self._principal_axis()
@@ -344,20 +367,35 @@ class FrameAligner:
         if axis is None or self._axis_evidence < self.cfg.yaw_min_evidence:
             return
         self._yaw_axis = axis
-        sign = 0.0
         signed_n = float(np.linalg.norm(self._signed_sum))
-        if self._gnss_sign_evidence > 0.2 and signed_n > 1e-6:
-            sign = float(np.sign(np.dot(self._signed_sum, axis)))
-        elif abs(self._turn_evidence) >= self.cfg.yaw_turn_evidence_min:
-            sign = float(np.sign(self._turn_evidence))
+        s_gnss = 0
+        if self._gnss_sign_evidence >= self.cfg.gnss_sign_evidence_min and signed_n > 1e-6:
+            dot = float(np.dot(self._signed_sum, axis))
+            if abs(dot) > 1e-9:
+                s_gnss = 1 if dot > 0.0 else -1
+        s_turn = 0
+        if abs(self._turn_evidence) >= self.cfg.yaw_turn_evidence_min:
+            if abs(self._turn_evidence) > 1e-12:
+                s_turn = 1 if self._turn_evidence > 0.0 else -1
+        if s_gnss != 0 and s_turn != 0 and s_gnss != s_turn:
+            self._yaw = None
+            self._yaw_conf = min(self._yaw_conf, 0.25)
+            return
+        sign = float(s_gnss if s_gnss != 0 else s_turn)
         if sign == 0.0:
             self._yaw_conf = float(
                 np.clip(self._axis_evidence / (self.cfg.yaw_min_evidence * 3.0), 0.0, 0.45)
             )
             return
         u = sign * axis
-        yaw = -float(np.arctan2(u[1], u[0]))
-        self._yaw = yaw
+        yaw_new = -float(np.arctan2(u[1], u[0]))
+        if self._yaw is not None:
+            d = abs(math.atan2(math.sin(yaw_new - self._yaw), math.cos(yaw_new - self._yaw)))
+            if d > self.cfg.yaw_disagree_rad:
+                self._yaw = None
+                self._yaw_conf = min(self._yaw_conf, 0.30)
+                return
+        self._yaw = yaw_new
         self._yaw_conf = float(
             np.clip(
                 0.35 * min(1.0, self._axis_evidence / (self.cfg.yaw_min_evidence * 2.5))
@@ -367,8 +405,7 @@ class FrameAligner:
                 1.0,
             )
         )
-        if self._gnss_sign_evidence < 0.2:
-            # Turn-only sign is usable but weaker than GNSS dv/dt.
+        if self._gnss_sign_evidence < self.cfg.gnss_sign_evidence_min:
             self._yaw_conf = min(self._yaw_conf, 0.85)
         self._last_yaw_update_t = t
 
@@ -386,26 +423,22 @@ class FrameAligner:
 
         yaw_stale = False
         if self._last_yaw_update_t is not None:
-            yaw_stale = (t - self._last_yaw_update_t) > self.cfg.yaw_hold_s * 4.0
+            yaw_stale = (t - self._last_yaw_update_t) > self.cfg.yaw_hold_s * 2.0
+        if self._yaw is not None and yaw_stale:
+            self._yaw = None
+            self._yaw_conf = min(self._yaw_conf, 0.30)
 
         if self._yaw is not None and self._yaw_conf >= 0.35 and not yaw_stale:
             self._status = CalibrationStatus.FULLY_ALIGNED
+            conf = self._compose_confidence()
+            if conf.overall < self.cfg.fully_aligned_min_confidence:
+                self._status = CalibrationStatus.YAW_UNCERTAIN
         elif self._yaw_axis is not None:
             self._status = CalibrationStatus.YAW_UNCERTAIN
-        else:
-            if self._status == CalibrationStatus.REINITIALIZING:
-                self._status = CalibrationStatus.ROLL_PITCH_VALID
-            elif self._status not in (
-                CalibrationStatus.DEGRADED,
-                CalibrationStatus.FULLY_ALIGNED,
-                CalibrationStatus.YAW_UNCERTAIN,
-            ):
-                self._status = CalibrationStatus.ROLL_PITCH_VALID
-
-        if self._status == CalibrationStatus.FULLY_ALIGNED:
-            conf = self._compose_confidence()
-            if conf.overall < self.cfg.fully_aligned_min_confidence * 0.5:
-                self._status = CalibrationStatus.DEGRADED
+        elif self._status == CalibrationStatus.REINITIALIZING:
+            self._status = CalibrationStatus.ROLL_PITCH_VALID
+        elif self._status != CalibrationStatus.DEGRADED:
+            self._status = CalibrationStatus.ROLL_PITCH_VALID
 
     def _rebuild_rotation(self) -> None:
         if not self._g_initialized or self._g_up_p is None:
