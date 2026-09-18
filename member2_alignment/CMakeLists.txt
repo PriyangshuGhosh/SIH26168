@@ -73,7 +73,7 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(member2_python_tests PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/python"
+    ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/python;MEMBER2_CSV_ALIGNER=$<TARGET_FILE:member2_csv_aligner>"
   )
 endif()
 endif()
