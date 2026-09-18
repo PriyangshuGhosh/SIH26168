@@ -4,6 +4,10 @@
 #include "member4/MapMatchingEngine.hpp"
 #include "member5/GnssDeficitMachine.hpp"
 #include "member5/SpscRing.hpp"
+#include "member5/ImuTimestampPairer.hpp"
+#include "member5/MapCatalog.hpp"
+#include "member5/SpeedUnits.hpp"
+#include "member5/SpeedValidity.hpp"
 #include "test_support.hpp"
 
 #include <chrono>
@@ -11,6 +15,7 @@
 #include <cstdio>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <string>
 #include <thread>
 
@@ -302,6 +307,165 @@ int test_onnx_path() {
     return 0;
 }
 
+int test_speed_validity_matrix() {
+    using sih26168::member5::SpeedValidityFilter;
+    using sih26168::member5::SpeedRejectReason;
+    using sih26168::member5::mpsToKmh;
+    using sih26168::member5::kmhToMps;
+
+    CHECK(std::abs(mpsToKmh(10.0) - 36.0) < 1e-12);
+    CHECK(std::abs(kmhToMps(36.0) - 10.0) < 1e-12);
+    CHECK(std::abs(mpsToKmh(194.4) - 699.84) < 0.01);
+
+    SpeedValidityFilter f;
+    SpeedRejectReason why = SpeedRejectReason::None;
+
+    CHECK(f.accept(0.0, 0.0, &why)); /* 1. 0 km/h stationary */
+    CHECK(f.accept(1.0, kmhToMps(1.0), &why));
+    CHECK(f.accept(4.0, kmhToMps(10.0), &why));
+    CHECK(f.accept(8.0, kmhToMps(50.0), &why));
+    CHECK(f.accept(14.0, kmhToMps(100.0), &why)); /* 5. 100 km/h */
+
+    /* 6-7 braking / acceleration at realistic dt */
+    CHECK(f.accept(16.0, kmhToMps(60.0), &why));
+    CHECK(f.accept(18.0, kmhToMps(80.0), &why));
+
+    const double trusted = f.lastTrustedMps();
+    CHECK(!f.accept(18.05, 194.4, &why)); /* 8. isolated 700 km/h */
+    CHECK(why == SpeedRejectReason::AboveMax || why == SpeedRejectReason::ImpossibleJump);
+    CHECK(std::abs(f.lastTrustedMps() - trusted) < 1e-12);
+
+    CHECK(!f.accept(18.10, 194.4, &why)); /* 9. repeated spike */
+    CHECK(!f.accept(19.0, std::nan(""), &why)); /* 10. NaN */
+    CHECK(!f.accept(20.0, std::numeric_limits<double>::infinity(), &why)); /* 11. Inf */
+    CHECK(!f.accept(21.0, -1.0, &why)); /* 12. negative */
+
+    CHECK(!f.acceptAiMeasurement(22.0, 10.0, 0.0, &why)); /* 13. zero variance */
+    CHECK(why == SpeedRejectReason::VarianceInvalid);
+    CHECK(!f.acceptAiMeasurement(22.0, 10.0, 1e-18, &why)); /* 14. tiny variance */
+    CHECK(f.acceptAiMeasurement(24.0, kmhToMps(90.0), 400.0, &why)); /* 15. huge but usable variance */
+
+    CHECK(!f.accept(10.0, 5.0, &why)); /* 17. timestamp regression */
+    CHECK(why == SpeedRejectReason::TimestampInvalid);
+
+    SpeedValidityFilter g;
+    CHECK(g.accept(0.0, 2.0, &why));
+    CHECK(!g.accept(0.05, 194.4, &why)); /* jump using actual dt */
+    CHECK(g.lastTrustedMps() < 5.0);
+
+    SpeedValidityFilter stat;
+    CHECK(stat.accept(0.0, 0.0, &why));
+    CHECK(stat.accept(0.02, 0.05, &why)); /* 19. tiny phone movement */
+    CHECK(stat.lastTrustedMps() < 1.0);
+    CHECK(stat.accept(1.0, 0.2, &why)); /* 20. engine vibration-scale */
+    CHECK(stat.lastTrustedMps() < 1.0);
+    return 0;
+}
+
+int test_imu_timestamp_pairer() {
+    sih26168::member5::ImuTimestampPairer p(0.008);
+    CHECK(std::abs(sih26168::member5::sensorEventNsToSeconds(1'000'000'000LL) - 1.0) < 1e-12);
+    auto none = p.feedAccel(1.000, 0.1, 0.0, 9.81);
+    CHECK(!none.has_value());
+    auto paired = p.feedGyro(1.003, 0.0, 0.0, 0.01);
+    CHECK(paired.has_value());
+    CHECK(std::abs(paired->ax - 0.1) < 1e-12);
+    CHECK(std::abs(paired->gz - 0.01) < 1e-12);
+    auto stale = p.feedGyro(1.050, 0.0, 0.0, 0.0); /* 47 ms skew vs last accel */
+    CHECK(!stale.has_value());
+    auto dup = p.feedAccel(1.002, 0.2, 0.0, 9.81);
+    CHECK(!dup.has_value()); /* timestamp regression vs last emit */
+    return 0;
+}
+
+int test_map_catalog_and_out_of_region() {
+    const std::string pack = sih26168_find_roadpack();
+    sih26168::member5::MapCatalog cat;
+    CHECK(cat.loadManifestFile("member4_map_matching/data/maps/manifest.json"));
+    CHECK(cat.findCovering(12.9716, 77.5946) != nullptr);
+    CHECK(cat.findCovering(28.6139, 77.2090) == nullptr); /* Delhi */
+
+    CHECK(idr_engine_init(pack.c_str(), "mock") == 1);
+    CHECK(idr_select_map_for_location(12.9716, 77.5946) == 1);
+    CHECK(idr_map_covers_location(12.9716, 77.5946) == 1);
+    CHECK(idr_select_map_for_location(28.6139, 77.2090) == 0);
+    CHECK(std::string(idr_map_status_message()).find("NOT AVAILABLE") != std::string::npos);
+
+    idr_feed_gnss(1.0, 28.6139, 77.2090, 200.0, 5.0, 1.0, 10);
+    wait_for([] { return idr_get_current_state().timestamp >= 1.0; }, 800);
+    CHECK(idr_is_on_road_network() == 0);
+    IDRNavigationOutput far = idr_get_current_state();
+    CHECK(std::abs(far.lat - 28.6139) < 0.01);
+    CHECK(std::abs(far.lon - 77.2090) < 0.01);
+
+    CHECK(idr_engine_init("member4_map_matching/data/maps/manifest.json", "mock") == 1);
+    CHECK(idr_select_map_for_location(12.9720, 77.5950) == 1);
+    CHECK(idr_select_map_for_location(17.6868, 83.2185) == 0); /* Vizag vs provisioned grid */
+    idr_engine_shutdown();
+    return 0;
+}
+
+int test_e2e_speed_spike_and_gnss_outage_map() {
+    const std::string pack = sih26168_find_roadpack();
+    CHECK(idr_engine_init(pack.c_str(), "mock") == 1);
+    CHECK(idr_select_map_for_location(12.9716, 77.5946) == 1);
+
+    /* START 0, ACCEL, CRUISE, BRAKE via GNSS+IMU (canonical m/s). */
+    struct Phase {
+        double t0;
+        double speed;
+        int n;
+    };
+    const Phase phases[] = {{0.0, 0.0, 50}, {0.5, 5.0, 50}, {1.0, 10.0, 80}, {1.8, 0.0, 50}};
+    double t = 0.0;
+    for (const auto& ph : phases) {
+        for (int i = 0; i < ph.n; ++i) {
+            t = ph.t0 + 0.01 * (i + 1);
+            idr_feed_gnss(t, 12.9716 + (ph.speed * t) / 111320.0, 77.5946, 920.0, ph.speed, 1.0, 10);
+            idr_feed_imu(t + 0.001, 0.0, 0.0, 9.81, 0.0, 0.0, 0.0);
+        }
+    }
+    wait_for([] { return idr_get_current_state().timestamp > 2.0; }, 1500);
+    IDRNavigationOutput cruise = idr_get_current_state();
+    CHECK(cruise.speed_m_s < 55.0);
+    CHECK(std::abs(sih26168::member5::mpsToKmh(cruise.speed_m_s) - 700.0) > 100.0);
+
+    /* Gravity-leak / tiny-phone-motion: large ax, timestamps in seconds. */
+    for (int i = 0; i < 2000; ++i) {
+        t += 0.01;
+        idr_feed_imu(t, 9.81, 0.0, 0.2, 0.0, 0.0, 0.0);
+    }
+    wait_for([t] { return idr_get_current_state().timestamp >= t - 0.05; }, 2000);
+    IDRNavigationOutput after = idr_get_current_state();
+    CHECK(after.speed_m_s <= 55.0 + 1e-6);
+    CHECK(sih26168::member5::mpsToKmh(after.speed_m_s) < 250.0);
+    IDRDiagnostics diag = idr_get_diagnostics();
+    CHECK(diag.ekf_speed_mps <= 55.0 + 1e-6);
+
+    /* GNSS outage: keep using already-loaded map; no network. */
+    const double lat_before = after.lat;
+    const double t0 = after.timestamp;
+    for (int i = 0; i < 200; ++i) {
+        idr_feed_imu(t0 + 0.01 * (i + 1), 0.0, 0.0, 9.81, 0.0, 0.0, 0.0);
+    }
+    wait_for(
+        [t0] {
+            IDRNavigationOutput s = idr_get_current_state();
+            return s.is_dead_reckoning == 1 && s.timestamp >= t0 + 1.2;
+        },
+        1500);
+    IDRNavigationOutput dr = idr_get_current_state();
+    CHECK(dr.is_dead_reckoning == 1);
+    CHECK(std::abs(dr.lat - 28.6) > 1.0); /* not teleported to Delhi */
+    CHECK(std::abs(dr.lat - lat_before) < 0.05);
+
+    idr_feed_gnss(dr.timestamp + 0.05, 12.9717, 77.5946, 920.0, 5.0, 0.9, 10);
+    wait_for([] { return idr_get_current_state().is_dead_reckoning == 0; }, 1500);
+    CHECK(idr_get_current_state().is_dead_reckoning == 0);
+    idr_engine_shutdown();
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -342,6 +506,18 @@ int main() {
         return 1;
     }
     if (test_onnx_path() != 0) {
+        return 1;
+    }
+    if (test_speed_validity_matrix() != 0) {
+        return 1;
+    }
+    if (test_imu_timestamp_pairer() != 0) {
+        return 1;
+    }
+    if (test_map_catalog_and_out_of_region() != 0) {
+        return 1;
+    }
+    if (test_e2e_speed_spike_and_gnss_outage_map() != 0) {
         return 1;
     }
     std::printf("member5 tests passed\n");

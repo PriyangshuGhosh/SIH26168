@@ -17,6 +17,8 @@ struct MapMatcherConfig {
     double on_road_confidence_min{0.35};
     double on_road_distance_max_m{25.0};
     double max_sigma_for_forced_on_road_m{40.0};
+    /* Candidates farther than this are never considered (no city-scale snap). */
+    double max_search_radius_m{120.0};
 };
 
 class MapMatchingEngine {
@@ -29,6 +31,8 @@ public:
 
     bool hasMap() const { return !segments_.empty(); }
     std::size_t segmentCount() const { return segments_.size(); }
+    bool geographicBounds(double& min_lat, double& max_lat, double& min_lon, double& max_lon) const;
+    bool coversLocation(double lat, double lon, double margin_m = 50.0) const;
 
     void reset();
 
@@ -85,7 +89,7 @@ private:
     static double positionSigma(const member3::NavigationState& nav);
     static double haversineM(double lat1, double lon1, double lat2, double lon2);
     static double angularDiff(double a, double b);
-    static double searchRadius(const member3::NavigationState& nav, double base);
+    double searchRadius(const member3::NavigationState& nav, double base) const;
 
     void projectPointToSegment(
         double lat,

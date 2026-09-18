@@ -26,6 +26,21 @@ typedef struct {
     double confidence;
 } IDRNavigationOutput;
 
+/* Extra diagnostics. Does not change IDRNavigationOutput layout. */
+typedef struct {
+    double raw_gnss_speed_mps;
+    double ai_speed_mps;
+    double ekf_speed_mps;
+    double displayed_speed_mps;
+    int speed_valid; /* 1 = speed_m_s is a trusted estimate */
+    int map_status;  /* 0 unknown, 1 in-region, 2 out-of-region, 3 no package */
+    int calibration_status;
+    int last_ai_speed_accepted;
+    double imu_hz;
+    double last_imu_timestamp;
+    double last_gnss_timestamp;
+} IDRDiagnostics;
+
 /* Returns 1 on success, 0 on failure. */
 IDR_API int idr_engine_init(const char* map_db_path, const char* onnx_model_path);
 IDR_API void idr_engine_shutdown(void);
@@ -46,6 +61,16 @@ IDR_API int idr_engine_is_initialized(void);
 IDR_API long long idr_get_road_segment_id(void);
 IDR_API int idr_is_on_road_network(void);
 IDR_API const char* idr_engine_speed_backend(void);
+
+/* Map region selection (offline catalog / single roadpack). 1 = in region. */
+IDR_API int idr_select_map_for_location(double lat, double lon);
+IDR_API int idr_map_covers_location(double lat, double lon);
+IDR_API const char* idr_active_map_region_id(void);
+IDR_API const char* idr_map_status_message(void);
+
+IDR_API int idr_speed_is_valid(void);
+IDR_API const char* idr_speed_reject_reason(void);
+IDR_API IDRDiagnostics idr_get_diagnostics(void);
 
 #ifdef __cplusplus
 }

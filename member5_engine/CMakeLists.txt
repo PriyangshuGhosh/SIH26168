@@ -20,6 +20,8 @@ endif()
 
 set(IDR_ENGINE_SOURCES
   src/SpeedEstimator.cpp
+  src/SpeedValidity.cpp
+  src/MapCatalog.cpp
   src/Engine.cpp
   src/idr_engine_api.cpp
 )

@@ -49,7 +49,11 @@ Implemented under [`member5_engine/`](member5_engine/README.md). C ABI for Membe
 [`member5_engine/include/idr_engine_api.h`](member5_engine/include/idr_engine_api.h).
 Binding notes: [`docs/member5/INTEGRATION.md`](docs/member5/INTEGRATION.md).
 
-## Build
+## Member 6 (mobile)
+
+Implemented under [`member6_mobile/`](member6_mobile/README.md). Documentation:
+[`docs/member6/`](docs/member6/README.md).
+
 
 ```bash
 python3 -m pip install -r member2_alignment/requirements.txt

@@ -199,6 +199,34 @@ void ai_speed_and_gate() {
     assert(std::abs(e.state().v_x - velocity) < 1e-9);
 }
 
+void ai_speed_194_mps_vs_nav_2_mps_is_rejected() {
+    EKFFusionEngine e;
+    e.predict(imu(0.0), NavigationMode::DEAD_RECKONING);
+    e.updateAiSpeed({0.0, 2.0, 0.25, true});
+    assert(e.state().last_ai_speed_accepted);
+    const double before = e.state().v_x;
+    assert(std::abs(before - 2.0) < 0.5);
+
+    e.updateAiSpeed({0.0, 194.4, 0.05, true}); /* ~700 km/h */
+    assert(!e.state().last_ai_speed_accepted);
+    assert(std::abs(e.state().v_x - before) < 1e-9);
+    assert(std::hypot(e.state().v_x, e.state().v_y) < 10.0);
+
+    e.updateAiSpeed({0.0, 40.0, 0.05, true}); /* below max, NIS must still reject */
+    assert(!e.state().last_ai_speed_accepted);
+    assert(std::abs(e.state().v_x - before) < 1e-9);
+}
+
+void tiny_variance_is_floored_not_blindly_trusted() {
+    EKFFusionEngine e;
+    e.predict(imu(0.0), NavigationMode::DEAD_RECKONING);
+    e.updateAiSpeed({0.0, 2.0, 0.25, true});
+    const double before = e.state().v_x;
+    e.updateAiSpeed({0.0, 30.0, 1e-18, true});
+    /* Either rejected by NIS or accepted only with floored variance — never a 30 m/s jump. */
+    assert(std::abs(e.state().v_x - before) < 5.0);
+}
+
 void delayed_measurements_do_not_rewind_public_time() {
     EKFFusionEngine e;
     e.updateGnss(gnss(0.0, 17.385, 78.4867));
@@ -301,6 +329,8 @@ int main() {
     gnss_speed_is_optional();
     gnss_speed_survives_position_rejection();
     ai_speed_and_gate();
+    ai_speed_194_mps_vs_nav_2_mps_is_rejected();
+    tiny_variance_is_floored_not_blindly_trusted();
     delayed_measurements_do_not_rewind_public_time();
     invalid_inputs_and_timestamps();
     covariance_remains_psd();

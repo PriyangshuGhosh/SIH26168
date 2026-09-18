@@ -22,6 +22,7 @@ struct NavigationState {
     bool valid{false};
     bool last_gnss_accepted{false};
     bool last_ai_speed_accepted{false};
+    bool last_velocity_recovered{false};
 };
 
 struct GnssMeasurement {
@@ -52,6 +53,10 @@ struct EKFFusionConfig {
     double gnss_speed_variance_floor_m2s2{0.25};
     double gnss_nis_threshold{5.991};
     double speed_nis_threshold{3.841};
+    /* Passenger-road demo envelope (~198 km/h). Configurable; not a physics law. */
+    double max_vehicle_speed_mps{55.0};
+    double min_speed_variance_m2s2{0.04};
+    double max_speed_variance_m2s2{2500.0};
     double nhc_variance_m2s2{0.04};
     double nhc_nis_threshold{3.841};
     // Measurements are expected to be timestamp-aligned to the latest EKF epoch.

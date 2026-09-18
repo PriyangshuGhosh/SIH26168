@@ -41,6 +41,8 @@ private:
     void initializeCovariance();
     void updateNavigationState();
     bool updateSpeedMeasurement(double measuredSpeed, double variance);
+    bool recoverDivergedVelocity();
+    static double hypotSpeed(double vx, double vy);
     bool updateScalarMeasurement(double innovation,
                                  const Eigen::Matrix<double, 1, kStateDim>& H,
                                  double variance, double nisThreshold);

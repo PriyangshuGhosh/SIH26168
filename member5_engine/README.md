@@ -40,11 +40,15 @@ int idr_is_on_road_network(void);
 
 `idr_engine_init` returns **1 on success, 0 on failure**. On failure, `idr_engine_last_error()`.
 
-Units: IMU m/s² and rad/s (phone frame). GNSS WGS84 degrees, speed m/s. Output heading is **degrees**. Matched lat/lon/heading/confidence come from Member 4 when the fix is on-network; segment id and on-road flag are extra C getters so the original `IDRNavigationOutput` layout is unchanged.
+Units: IMU m/s² and rad/s (phone frame). GNSS WGS84 degrees, speed **m/s**. Output heading is **degrees**.
+Trusted output speed is m/s after Member 5 validity checks (`max_vehicle_speed_mps` default 55 ≈ 198 km/h passenger-road demo bound; `max_speed_change_mps_per_second` default 12).
+Matched lat/lon/heading/confidence come from Member 4 when the fix is on-network; segment id and on-road flag are extra C getters so the original `IDRNavigationOutput` layout is unchanged.
+
+`idr_engine_init` also accepts `maps/manifest.json`. Region selection uses the user's GNSS position; a single test `.roadpack` is not treated as a worldwide map.
 
 ## Production vs mock
 
-- **Map:** `map_db_path` must be an existing Member 4 `.roadpack`. GraphML/GeoJSON are offline **build** inputs (Python tools), not the C++ runtime format. Empty path, `mock:`, or a corrupt pack fails init.
+- **Map:** `map_db_path` must be an existing Member 4 `.roadpack` **or** a `maps/manifest.json`. GraphML/GeoJSON are offline **build** inputs (Python tools), not the C++ runtime format. Empty path, `mock:`, or a corrupt pack fails init.
 - **Speed:** production requires `speed_estimator.onnx` and a build with `-DIDR_WITH_ONNXRUNTIME=ON`. Missing model **fails init** (no silent mock).
 - **Explicit mock (tests/dev only):** `onnx_model_path` of `"mock"` / `"mock:..."`, or `SIH26168_ALLOW_MOCK_SPEED=1`.
 
