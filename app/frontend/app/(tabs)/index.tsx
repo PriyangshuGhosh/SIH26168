@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import Icon from "@react-native-vector-icons/material-design-icons";
 
 import {
   DataRow,
@@ -134,7 +133,7 @@ export default function NavigationScreen() {
           ]}
           testID="vehicle-marker"
         >
-          <Icon name="navigation" size={22} color={colors.onBrandPrimary} />
+          <Text style={{ fontSize: 16, color: colors.onBrandPrimary }}>▲</Text>
         </View>
       </View>
 
@@ -218,7 +217,7 @@ export default function NavigationScreen() {
 
         {speedEval.reason !== RejectionReason.NONE ? (
           <View style={styles.rejectBanner} testID="reject-banner">
-            <Icon name="alert-octagon" size={16} color={colors.error} />
+            <Text style={{ fontSize: 16, color: colors.error }}>⚠</Text>
             <Text style={styles.rejectText}>
               SAFETY GUARD: {speedEval.reason}
             </Text>

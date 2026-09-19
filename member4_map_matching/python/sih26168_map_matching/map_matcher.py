@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from pathlib import Path
 
 from .candidates import generate_candidates, search_radius_m
@@ -21,6 +22,7 @@ class MapMatcherConfig:
     on_road_distance_max_m: float = 25.0
     # Reject forced snaps when uncertainty dwarfs the distance signal
     max_sigma_for_forced_on_road_m: float = 40.0
+    max_search_radius_m: float = 120.0
 
 
 @dataclass
@@ -48,12 +50,16 @@ class MapMatcher:
 
     def match(self, state: NavigationState) -> MapMatchedPosition:
         """Online step: append observation, run sliding-window Viterbi, emit latest."""
+        gated = self._coverage_gate(state)
+        if gated is not None:
+            return gated
         cands = generate_candidates(
             state,
             self.network,
             self._index,
             base_radius_m=self.config.base_search_radius_m,
             max_candidates=self.config.max_candidates,
+            max_radius_m=self.config.max_search_radius_m,
         )
         self._window_states.append(state)
         self._window_candidates.append(cands)
@@ -72,21 +78,27 @@ class MapMatcher:
     ) -> list[MapMatchedPosition]:
         """Batch offline decode (full sequence Viterbi, not independent snaps)."""
         self.reset()
-        candidate_sets = [
-            generate_candidates(
-                s,
-                self.network,
-                self._index,
-                base_radius_m=self.config.base_search_radius_m,
-                max_candidates=self.config.max_candidates,
-            )
-            for s in states
-        ]
+        candidate_sets = []
+        for s in states:
+            if self._coverage_gate(s) is not None:
+                candidate_sets.append([])
+            else:
+                candidate_sets.append(
+                    generate_candidates(
+                        s,
+                        self.network,
+                        self._index,
+                        base_radius_m=self.config.base_search_radius_m,
+                        max_candidates=self.config.max_candidates,
+                        max_radius_m=self.config.max_search_radius_m,
+                    )
+                )
         path, _ = viterbi_decode(states, candidate_sets, self.network)
-        return [
-            self._to_output(s, m, cands)
-            for s, m, cands in zip(states, path, candidate_sets)
-        ]
+        out = []
+        for s, m, cands in zip(states, path, candidate_sets):
+            gated = self._coverage_gate(s)
+            out.append(gated if gated is not None else self._to_output(s, m, cands))
+        return out
 
     def nearest_road_baseline(
         self, states: list[NavigationState]
@@ -104,6 +116,32 @@ class MapMatcher:
             matched = cands[0] if cands else None
             outputs.append(self._to_output(state, matched, cands))
         return outputs
+
+    def _coverage_gate(self, state: NavigationState) -> MapMatchedPosition | None:
+        if not isfinite(state.latitude) or not isfinite(state.longitude):
+            return self._pass_through(state, "INVALID_COORDINATES", False)
+        if not self.network.segments:
+            return self._pass_through(state, "NO_MAP_DATA", False)
+        if not self.network.contains(state.latitude, state.longitude):
+            return self._pass_through(state, "OUTSIDE_MAP", False)
+        return None
+
+    def _pass_through(
+        self, state: NavigationState, status: str, map_available: bool
+    ) -> MapMatchedPosition:
+        return MapMatchedPosition(
+            timestamp=state.timestamp,
+            lat_snapped=state.latitude,
+            lon_snapped=state.longitude,
+            heading_snapped_rad=state.yaw_rad,
+            road_segment_id=0,
+            confidence_score=0.0,
+            is_on_road_network=False,
+            distance_to_road_m=-1.0,
+            map_available=map_available,
+            match_valid=False,
+            match_status=status,
+        )
 
     def _to_output(
         self,
@@ -123,6 +161,9 @@ class MapMatcher:
                 distance_to_road_m=search_radius_m(
                     state, self.config.base_search_radius_m
                 ),
+                map_available=True,
+                match_valid=False,
+                match_status="NO_CANDIDATES",
             )
 
         confidence = candidate_confidence(state, matched, candidates)
@@ -146,6 +187,9 @@ class MapMatcher:
                 confidence_score=confidence,
                 is_on_road_network=False,
                 distance_to_road_m=matched.distance_m,
+                map_available=True,
+                match_valid=False,
+                match_status="REJECTED",
             )
 
         return MapMatchedPosition(
@@ -157,4 +201,7 @@ class MapMatcher:
             confidence_score=confidence,
             is_on_road_network=True,
             distance_to_road_m=matched.distance_m,
+            map_available=True,
+            match_valid=True,
+            match_status="OK",
         )

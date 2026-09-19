@@ -78,17 +78,34 @@ bool MapMatchingEngine::loadRoadpack(const std::string& path) {
             }
             seg.lats.reserve(n_pts);
             seg.lons.reserve(n_pts);
-            for (int i = 0; i < n_pts; ++i) {
+            int got_pts = 0;
+            while (got_pts < n_pts) {
                 if (!std::getline(in, line)) {
                     last_error_ = "truncated segment points";
                     return false;
                 }
+                if (line.empty()) {
+                    continue;
+                }
                 std::istringstream ps(line);
                 std::string ptag;
+                ps >> ptag;
+                if (ptag == "HIGHWAY" || ptag == "MAXSPEED" || ptag == "ONEWAY" || ptag == "META") {
+                    continue;
+                }
+                if (ptag != "PT") {
+                    last_error_ = "expected PT in roadpack segment";
+                    return false;
+                }
                 double lat, lon;
-                ps >> ptag >> lat >> lon;
+                ps >> lat >> lon;
+                if (!std::isfinite(lat) || !std::isfinite(lon)) {
+                    last_error_ = "non-finite geometry in roadpack";
+                    return false;
+                }
                 seg.lats.push_back(lat);
                 seg.lons.push_back(lon);
+                ++got_pts;
             }
             if (seg.lats.empty()) {
                 last_error_ = "empty segment geometry";
@@ -446,12 +463,33 @@ std::vector<MapMatchingEngine::Candidate> MapMatchingEngine::viterbi(
     return out;
 }
 
+MapMatchedPosition MapMatchingEngine::passThrough(
+    const member3::NavigationState& nav, MatchStatus status) const {
+    MapMatchedPosition m;
+    m.timestamp = nav.timestamp;
+    m.lat_snapped = nav.latitude;
+    m.lon_snapped = nav.longitude;
+    m.heading_snapped_rad = nav.yaw_rad;
+    m.road_segment_id = 0;
+    m.confidence_score = 0.0;
+    m.is_on_road_network = false;
+    m.match_distance_m = -1.0;
+    m.map_available = hasMap() && status != MatchStatus::NoMapData;
+    m.match_valid = false;
+    m.match_status = status;
+    if (status == MatchStatus::OutsideMap) {
+        m.map_available = false;
+    }
+    return m;
+}
+
 MapMatchedPosition MapMatchingEngine::toOutput(
     const member3::NavigationState& nav,
     const Candidate* matched,
     const std::vector<Candidate>& candidates) const {
     MapMatchedPosition m;
     m.timestamp = nav.timestamp;
+    m.map_available = true;
     if (matched == nullptr || matched->distance_m < 0.0 || matched->segment_id == 0) {
         m.lat_snapped = nav.latitude;
         m.lon_snapped = nav.longitude;
@@ -459,6 +497,9 @@ MapMatchedPosition MapMatchingEngine::toOutput(
         m.road_segment_id = 0;
         m.confidence_score = 0.0;
         m.is_on_road_network = false;
+        m.match_distance_m = -1.0;
+        m.match_valid = false;
+        m.match_status = candidates.empty() ? MatchStatus::NoCandidates : MatchStatus::Rejected;
         return m;
     }
 
@@ -489,28 +530,34 @@ MapMatchedPosition MapMatchingEngine::toOutput(
 
     m.road_segment_id = matched->segment_id;
     m.confidence_score = confidence;
+    m.match_distance_m = matched->distance_m;
     if (on_road) {
         m.lat_snapped = matched->lat;
         m.lon_snapped = matched->lon;
         m.heading_snapped_rad = matched->heading_rad;
         m.is_on_road_network = true;
+        m.match_valid = true;
+        m.match_status = MatchStatus::Ok;
     } else {
         m.lat_snapped = nav.latitude;
         m.lon_snapped = nav.longitude;
         m.heading_snapped_rad = nav.yaw_rad;
         m.is_on_road_network = false;
+        m.match_valid = false;
+        m.match_status = MatchStatus::Rejected;
     }
     return m;
 }
 
 MapMatchedPosition MapMatchingEngine::match(const member3::NavigationState& nav) {
-    if (segments_.empty() || !coversLocation(nav.latitude, nav.longitude)) {
-        MapMatchedPosition m;
-        m.timestamp = nav.timestamp;
-        m.lat_snapped = nav.latitude;
-        m.lon_snapped = nav.longitude;
-        m.heading_snapped_rad = nav.yaw_rad;
-        return m;
+    if (!std::isfinite(nav.latitude) || !std::isfinite(nav.longitude)) {
+        return passThrough(nav, MatchStatus::InvalidCoordinates);
+    }
+    if (segments_.empty()) {
+        return passThrough(nav, MatchStatus::NoMapData);
+    }
+    if (!coversLocation(nav.latitude, nav.longitude)) {
+        return passThrough(nav, MatchStatus::OutsideMap);
     }
 
     auto cands = generateCandidates(nav);
@@ -537,7 +584,12 @@ std::vector<MapMatchedPosition> MapMatchingEngine::matchTrajectory(
     std::vector<std::vector<Candidate>> cand_sets;
     cand_sets.reserve(states.size());
     for (const auto& s : states) {
-        cand_sets.push_back(generateCandidates(s));
+        if (!std::isfinite(s.latitude) || !std::isfinite(s.longitude) ||
+            !coversLocation(s.latitude, s.longitude)) {
+            cand_sets.emplace_back();
+        } else {
+            cand_sets.push_back(generateCandidates(s));
+        }
     }
     auto path = viterbi(states, cand_sets);
     std::vector<MapMatchedPosition> out;
@@ -547,7 +599,15 @@ std::vector<MapMatchedPosition> MapMatchingEngine::matchTrajectory(
         if (i < path.size() && path[i].distance_m >= 0.0 && path[i].segment_id != 0) {
             matched = &path[i];
         }
-        out.push_back(toOutput(states[i], matched, cand_sets[i]));
+        if (!std::isfinite(states[i].latitude) || !std::isfinite(states[i].longitude)) {
+            out.push_back(passThrough(states[i], MatchStatus::InvalidCoordinates));
+        } else if (segments_.empty()) {
+            out.push_back(passThrough(states[i], MatchStatus::NoMapData));
+        } else if (!coversLocation(states[i].latitude, states[i].longitude)) {
+            out.push_back(passThrough(states[i], MatchStatus::OutsideMap));
+        } else {
+            out.push_back(toOutput(states[i], matched, cand_sets[i]));
+        }
     }
     return out;
 }

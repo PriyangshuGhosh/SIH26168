@@ -39,8 +39,6 @@ typedef struct {
     double imu_hz;
     double last_imu_timestamp;
     double last_gnss_timestamp;
-    int gnss_quality; /* 0 unknown, 1 outage, 2 weak, 3 available, 4 recovering */
-    int simulation;   /* 1 = SIMULATION / mock backend, never claim as live sensors */
 } IDRDiagnostics;
 
 /* Returns 1 on success, 0 on failure. */
@@ -49,6 +47,10 @@ IDR_API void idr_engine_shutdown(void);
 
 IDR_API void idr_feed_imu(double timestamp, double ax, double ay, double az, double gx, double gy,
                           double gz);
+/* `speed` is m/s, or NaN when the receiver reports no speed (never 0.0 for "unknown":
+   0.0 is a real stationary speed measurement). */
+/* `speed` is m/s, or NaN when the receiver reports no speed (never 0.0 for "unknown":
+   0.0 is a real stationary speed measurement). */
 IDR_API void idr_feed_gnss(double timestamp, double lat, double lon, double alt, double speed,
                            double hdop, int num_sats);
 
@@ -73,13 +75,6 @@ IDR_API const char* idr_map_status_message(void);
 IDR_API int idr_speed_is_valid(void);
 IDR_API const char* idr_speed_reject_reason(void);
 IDR_API IDRDiagnostics idr_get_diagnostics(void);
-
-/* Label mock/dev replay. Does not change IDRNavigationOutput layout. */
-IDR_API void idr_engine_set_simulation(int enabled);
-IDR_API int idr_engine_is_simulation(void);
-
-/* Test/SIMULATION only: inject an AI speed measurement (m/s). Returns 1 if EKF accepted. */
-IDR_API int idr_debug_inject_ai_speed(double timestamp, double velocity_mps, double variance_m2s2);
 
 #ifdef __cplusplus
 }

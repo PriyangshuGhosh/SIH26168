@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .geometry import meters_to_deg_bbox, project_point_to_road
 from .road_graph import RoadNetwork
 from .spatial_index import SpatialIndex
@@ -24,8 +26,13 @@ def generate_candidates(
     index: SpatialIndex,
     base_radius_m: float = 30.0,
     max_candidates: int = 12,
+    max_radius_m: float = 120.0,
 ) -> list[RoadCandidate]:
-    radius = search_radius_m(state, base_radius_m=base_radius_m)
+    if not math.isfinite(state.latitude) or not math.isfinite(state.longitude):
+        return []
+    radius = search_radius_m(
+        state, base_radius_m=base_radius_m, max_radius_m=max_radius_m
+    )
     min_lon, min_lat, max_lon, max_lat = meters_to_deg_bbox(
         state.latitude, state.longitude, radius
     )

@@ -62,10 +62,22 @@ export function selectRegion(
   return { active: null, outOfCoverage: true };
 }
 
-// Built-in demo pack + several plausible provisioned regions.
-// This is a DEMO catalog; a native build would load these from
-// application filesDir/roadpacks/*.roadpack manifest.
+// Built-in demo pack + provisioned regions.
+// Vizag is the PRIMARY region (first entry) — it is selected automatically
+// whenever the GNSS or dead-reckoning position falls within its bounds.
+// The offline map tile cache also covers exactly this region.
 export const BUILTIN_REGIONS: RoadPackRegion[] = [
+  {
+    regionId: "in-vizag",
+    name: "Visakhapatnam (Vizag)",
+    // Covers the offline tile pre-cache area: ~10 km × 10 km
+    minLatDeg: 17.60,
+    maxLatDeg: 17.78,
+    minLonDeg: 83.15,
+    maxLonDeg: 83.30,
+    version: "1.0.0",
+    source: "provisioned",
+  },
   {
     regionId: "demo-sandbox",
     name: "Demo Sandbox (0,0)",
@@ -87,16 +99,6 @@ export const BUILTIN_REGIONS: RoadPackRegion[] = [
     source: "provisioned",
   },
   {
-    regionId: "in-vizag",
-    name: "Visakhapatnam",
-    minLatDeg: 17.60,
-    maxLatDeg: 17.85,
-    minLonDeg: 83.15,
-    maxLonDeg: 83.40,
-    version: "1.0.0",
-    source: "provisioned",
-  },
-  {
     regionId: "in-delhi",
     name: "Delhi NCR",
     minLatDeg: 28.40,
@@ -107,3 +109,4 @@ export const BUILTIN_REGIONS: RoadPackRegion[] = [
     source: "provisioned",
   },
 ];
+

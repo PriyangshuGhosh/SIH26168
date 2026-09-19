@@ -68,3 +68,6 @@ class MapMatchedPosition:
     confidence_score: float
     is_on_road_network: bool
     distance_to_road_m: float = 0.0
+    map_available: bool = False
+    match_valid: bool = False
+    match_status: str = "NO_MAP_DATA"

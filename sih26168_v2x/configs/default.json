@@ -1,0 +1,8 @@
+{
+  "mode": "A_SOFTWARE_SIMULATION_ONLY",
+  "origin_latitude_deg": 12.9716,
+  "origin_longitude_deg": 77.5946,
+  "max_message_age_s": 1.5,
+  "nis_accept": 5.991,
+  "nis_reject": 9.210
+}
