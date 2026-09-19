@@ -24,6 +24,12 @@ class Config:
     accel_bias_rw_std: float = 0.02
     gyro_bias_rw_std: float = 0.002
     degraded_process_scale: float = 4.0
+    # Matches member3_fusion/include/member3/fusion_types.h's EKFFusionConfig default exactly
+    # (passenger-road demo envelope, ~198 km/h) -- was previously hardcoded to 100.0 m/s inline in
+    # update_speed(), which let an "impossible speed" reference test pass at a threshold the real
+    # C++ engine would already have rejected at.
+    max_vehicle_speed_mps: float = 55.0
+    max_speed_variance_m2s2: float = 2500.0
 
 
 class EKFReference:
@@ -149,7 +155,8 @@ class EKFReference:
         if not self._time_valid(t):
             return False
         if (not np.isfinite([t, velocity, variance]).all() or
-                velocity < 0.0 or velocity > 100.0 or variance <= 0.0):
+                velocity < 0.0 or velocity > self.cfg.max_vehicle_speed_mps or variance <= 0.0 or
+                variance > self.cfg.max_speed_variance_m2s2):
             return False
         H = np.zeros((1, 8))
         H[0, 2] = 1.0

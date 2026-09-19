@@ -510,9 +510,15 @@ void Engine::handleImu(const ImuSample& s) {
     last_imu_t_ = s.timestamp;
     noteImuRate(s.timestamp);
 
+    /* Member 1 is trained and exported on raw m/s^2 accelerometer values (matching Member 2's
+       AlignedIMUFrame units and Android's native TYPE_ACCELEROMETER convention) -- see
+       member1-ml/tests/conftest.py (stationary az ~= 9.81 m/s^2) and configs/member1.yaml's
+       robustness section (acc_std_mps2). Dividing by 9.80665 here would feed the model
+       accelerations in g instead of m/s^2, a ~9.8x scale mismatch against its training
+       distribution. Do not reintroduce that conversion. */
     const float ch[kChannels] = {
-        static_cast<float>(aligned.ax_v / 9.80665f), static_cast<float>(aligned.ay_v / 9.80665f),
-        static_cast<float>(aligned.az_v / 9.80665f), static_cast<float>(aligned.gx_v),
+        static_cast<float>(aligned.ax_v), static_cast<float>(aligned.ay_v),
+        static_cast<float>(aligned.az_v), static_cast<float>(aligned.gx_v),
         static_cast<float>(aligned.gy_v), static_cast<float>(aligned.gz_v)};
 
     ++stride_count_;

@@ -1,0 +1,8 @@
+# Member 4's .roadpack format is a hand-rolled, line-oriented text format read with strict
+# std::getline() equality checks (member4_map_matching/cpp/src/MapMatchingEngine.cpp), not a
+# format tolerant of CRLF. Without this, Git's Windows autocrlf conversion silently corrupts every
+# checked-out .roadpack (each line gains a trailing '\r', so the "SIH26168_ROADPACK_V1" header
+# check fails with "invalid roadpack header" and Member 4/5 tests and tools fail to load any map)
+# without changing the file's reported diff/size in an obvious way. Force LF unconditionally,
+# regardless of the checking-out machine's core.autocrlf setting.
+*.roadpack text eol=lf
