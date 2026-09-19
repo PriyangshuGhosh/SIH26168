@@ -1,8 +1,0 @@
-cmake_minimum_required(VERSION 3.22)
-project(idr_jni LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
-set(SIH26168_BUILD_HOST_TOOLS OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../ sih26168_native)
-add_library(idr_jni SHARED idr_jni.cpp)
-target_link_libraries(idr_jni PRIVATE idr_engine)
-target_include_directories(idr_jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../member5_engine/include)
