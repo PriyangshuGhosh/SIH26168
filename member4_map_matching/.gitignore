@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Pytest cache
+.pytest_cache/
+
+# Local Member 4 cache
+cache/
+
+# Generated OSM data
+data/osm/*.graphml
+data/osm/*.osm
+data/osm/*.pbf
+
+# Temporary diagnostic scripts
+diagnose_noisy_candidates.py
+
+# Backup files
+*_backup.py
