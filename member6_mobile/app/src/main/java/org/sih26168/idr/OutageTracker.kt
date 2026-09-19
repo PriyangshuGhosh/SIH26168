@@ -28,7 +28,7 @@ data class OutageRecord(
 }
 
 class OutageTracker {
-    var inOutage: Boolean = false
+    @Volatile var inOutage: Boolean = false
         private set
     var lastGps: GeoPoint? = null
         private set
@@ -41,11 +41,12 @@ class OutageTracker {
     private val historyMut = mutableListOf<OutageRecord>()
     private var pendingEstimatedAtRestore: GeoPoint? = null
 
-    val history: List<OutageRecord> get() = historyMut.toList()
-    val liveTrail: List<GeoPoint> get() = trail.toList()
+    val history: List<OutageRecord> @Synchronized get() = historyMut.toList()
+    val liveTrail: List<GeoPoint> @Synchronized get() = trail.toList()
     val liveDurationS: Double
-        get() = if (!inOutage) 0.0 else (lastEstimate?.t ?: startTime) - startTime
+        @Synchronized get() = if (!inOutage) 0.0 else (lastEstimate?.t ?: startTime) - startTime
 
+    @Synchronized
     fun reset() {
         inOutage = false
         lastGps = null
@@ -56,6 +57,7 @@ class OutageTracker {
         pendingEstimatedAtRestore = null
     }
 
+    @Synchronized
     fun noteEstimate(t: Double, lat: Double, lon: Double, deadReckoning: Boolean, simulatedOutage: Boolean) {
         if (!lat.isFinite() || !lon.isFinite()) return
         lastEstimate = GeoPoint(t, lat, lon)
@@ -65,7 +67,16 @@ class OutageTracker {
         if (!shouldBeOutage && inOutage) pendingEstimatedAtRestore = GeoPoint(t, lat, lon)
     }
 
-    fun noteRawGps(t: Double, lat: Double, lon: Double, feedToEngine: Boolean): OutageRecord? {
+    /**
+     * [estimateAtRestore]: engine estimate sampled immediately BEFORE the restored fix is fed to the
+     * engine. Preferred over polled estimates, because once the fix is fed the engine snaps its output
+     * to GNSS and a later poll would make drift ~0 (and 10 Hz polling can race the feed).
+     */
+    @Synchronized
+    fun noteRawGps(
+        t: Double, lat: Double, lon: Double, feedToEngine: Boolean,
+        estimateAtRestore: GeoPoint? = null
+    ): OutageRecord? {
         if (!lat.isFinite() || !lon.isFinite()) return null
         val gps = GeoPoint(t, lat, lon)
         if (!inOutage) {
@@ -73,7 +84,8 @@ class OutageTracker {
             return null
         }
         if (!feedToEngine) return null
-        val estimated = pendingEstimatedAtRestore ?: lastEstimate ?: gps
+        val estimated = estimateAtRestore?.takeIf { it.lat.isFinite() && it.lon.isFinite() }
+            ?: pendingEstimatedAtRestore ?: lastEstimate ?: gps
         val record = OutageRecord(startTime, t, estimated, gps, lastGpsBefore, trail.toList(), simulated)
         historyMut.add(record)
         inOutage = false
