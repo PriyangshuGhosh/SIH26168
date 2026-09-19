@@ -26,3 +26,9 @@ onnxruntime.zip
 demo/artifacts/*.png
 demo/artifacts/*.mp4
 !demo/artifacts/.gitkeep
+member6_mobile/.gradle/
+member6_mobile/build/
+member6_mobile/app/build/
+member6_mobile/local.properties
+member6_mobile/.idea/
+
