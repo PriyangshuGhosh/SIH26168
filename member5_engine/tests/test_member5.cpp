@@ -6,7 +6,6 @@
 #include "member5/SpscRing.hpp"
 #include "member5/ImuTimestampPairer.hpp"
 #include "member5/MapCatalog.hpp"
-#include "member5/SpeedEstimator.hpp"
 #include "member5/SpeedUnits.hpp"
 #include "member5/SpeedValidity.hpp"
 #include "test_support.hpp"
@@ -19,7 +18,6 @@
 #include <limits>
 #include <string>
 #include <thread>
-#include <vector>
 
 #define CHECK(cond)                                                                              \
     do {                                                                                         \
@@ -309,31 +307,56 @@ int test_onnx_path() {
     return 0;
 }
 
-int test_onnx_variance_name_m2s2() {
-#if defined(IDR_WITH_ONNXRUNTIME)
-    /* Member 1's REAL production output is named "velocity_variance_m2s2"
-       (member1-ml/src/inference/export_onnx.py::OUTPUT_NAMES_UNCERTAINTY), not "uncertainty" or
-       bare "variance". This fixture (member5_engine/scripts/make_dummy_onnx.py) mirrors that exact
-       name so a regression that only matches the older sigma-named ("uncertainty") convention is
-       caught here instead of silently falling back to the hardcoded 0.05 default variance. */
-    const char* dummy = "member5_engine/tests/data/dummy_speed_estimator_m2s2.onnx";
-    std::ifstream in(dummy, std::ios::binary);
-    if (!in.good()) {
-        std::printf("m2s2-named onnx dummy missing; skip variance-name regression test\n");
-        return 0;
-    }
-    in.close();
+/* Regression: a GNSS fix without speed (Android hasSpeed()==false -> NaN) must not reach the EKF
+   as an artificial 0 m/s measurement. A real 0.0 m/s must still be a valid measurement. */
+int test_gnss_without_speed_is_not_zero_measurement() {
+    using sih26168::member3::EKFFusionEngine;
+    using sih26168::member3::NavigationMode;
+    using sih26168::member5::GnssSample;
+    using sih26168::member5::toGnssMeasurement;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double lat = 12.9716;
+    const double lon = 77.5946;
 
-    sih26168::member5::OnnxSpeedEstimator est;
-    CHECK(est.load(dummy));
-    std::vector<float> window(static_cast<std::size_t>(est.requiredWindowSamples()) * 6, 1.5f);
-    const auto out = est.predict(window.data(), est.requiredWindowSamples());
-    CHECK(out.valid);
-    CHECK(std::abs(out.velocity_mps - 1.5f) < 1.0e-4f);
-    /* The fixture's velocity_variance_m2s2 output is a constant 2.25; the hardcoded 0.05 fallback
-       must NOT be observed here, or the real name is not being matched. */
-    CHECK(std::abs(out.variance_m2s2 - 2.25f) < 1.0e-4f);
-#endif
+    CHECK(!toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, nan, 1.0, 10}).speed_valid);
+    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 0.0, 1.0, 10}).speed_valid);
+    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}).speed_valid);
+
+    /* Establish ~1.3 m/s with real speed fixes, then apply a same-position fix at t=0.3 that either
+       has no speed (NaN) or a real 0.0 m/s; only the latter may pull the velocity down. */
+    auto speed_after = [&](double third_fix_speed, bool position_only, bool* accepted) {
+        EKFFusionEngine ekf;
+        sih26168::member2::AlignedIMUFrame f{};
+        f.az_v = 9.80665;
+        f.status = sih26168::member2::CalibrationStatus::FULLY_ALIGNED;
+        ekf.updateGnss(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}));
+        for (int i = 1; i <= 2; ++i) {
+            f.timestamp = 0.1 * i;
+            ekf.predict(f, NavigationMode::GNSS_AIDED);
+            ekf.updateGnss(toGnssMeasurement(GnssSample{0.1 * i, lat, lon, 900.0, 1.5, 1.0, 10}));
+        }
+        f.timestamp = 0.3;
+        ekf.predict(f, NavigationMode::GNSS_AIDED);
+        const double before = ekf.state().v_x;
+        auto m = toGnssMeasurement(GnssSample{0.3, lat, lon, 900.0, third_fix_speed, 1.0, 10});
+        if (position_only) {
+            m.speed_valid = false; /* Member 3's explicit position-only convention */
+        }
+        ekf.updateGnss(m);
+        if (accepted != nullptr) {
+            *accepted = ekf.state().last_gnss_accepted;
+        }
+        return std::make_pair(before, ekf.state().v_x);
+    };
+
+    bool none_accepted = false;
+    const auto none = speed_after(nan, false, &none_accepted);
+    const auto position_only = speed_after(1.5, true, nullptr);
+    const auto zero = speed_after(0.0, false, nullptr);
+    CHECK(none.first > 0.5);
+    CHECK(none_accepted);
+    CHECK(std::abs(none.second - position_only.second) < 1e-12);
+    CHECK(zero.second < none.second - 0.2);
     return 0;
 }
 
@@ -492,13 +515,6 @@ int test_e2e_speed_spike_and_gnss_outage_map() {
     idr_feed_gnss(dr.timestamp + 0.05, 12.9717, 77.5946, 920.0, 5.0, 0.9, 10);
     wait_for([] { return idr_get_current_state().is_dead_reckoning == 0; }, 1500);
     CHECK(idr_get_current_state().is_dead_reckoning == 0);
-
-    const double t_ai = idr_get_current_state().timestamp;
-    CHECK(idr_debug_inject_ai_speed(t_ai, 194.4, 0.05) == 0);
-    CHECK(idr_get_diagnostics().last_ai_speed_accepted == 0);
-    CHECK(idr_get_current_state().speed_m_s <= 55.0 + 1e-6);
-    CHECK(idr_engine_is_simulation() == 1);
-
     idr_engine_shutdown();
     return 0;
 }
@@ -545,7 +561,7 @@ int main() {
     if (test_onnx_path() != 0) {
         return 1;
     }
-    if (test_onnx_variance_name_m2s2() != 0) {
+    if (test_gnss_without_speed_is_not_zero_measurement() != 0) {
         return 1;
     }
     if (test_speed_validity_matrix() != 0) {

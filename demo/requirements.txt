@@ -1,0 +1,2 @@
+# Tkinter is in the Python standard library (no extra GUI wheel).
+# pygame is optional and unused by the default demo.

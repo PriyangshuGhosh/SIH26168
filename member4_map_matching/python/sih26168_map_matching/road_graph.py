@@ -29,6 +29,9 @@ class RoadSegment:
     min_lat: float
     max_lon: float
     max_lat: float
+    highway: str = ""
+    maxspeed_kmh: float | None = None
+    oneway: bool = True
 
 
 @dataclass
@@ -48,6 +51,29 @@ class RoadNetwork:
             segment.v_node,
             weight=segment.length_m,
             segment_id=segment.segment_id,
+        )
+
+    def bounds(self) -> tuple[float, float, float, float] | None:
+        if not self.segments:
+            return None
+        min_lat = min(s.min_lat for s in self.segments.values())
+        max_lat = max(s.max_lat for s in self.segments.values())
+        min_lon = min(s.min_lon for s in self.segments.values())
+        max_lon = max(s.max_lon for s in self.segments.values())
+        return min_lat, max_lat, min_lon, max_lon
+
+    def contains(self, lat: float, lon: float, margin_m: float = 50.0) -> bool:
+        import math
+
+        b = self.bounds()
+        if b is None or not math.isfinite(lat) or not math.isfinite(lon):
+            return False
+        min_lat, max_lat, min_lon, max_lon = b
+        dlat = margin_m / 111320.0
+        dlon = margin_m / (111320.0 * max(math.cos(math.radians(lat)), 1e-6))
+        return (
+            min_lat - dlat <= lat <= max_lat + dlat
+            and min_lon - dlon <= lon <= max_lon + dlon
         )
 
 
@@ -154,16 +180,27 @@ def load_graphml(path: Path) -> RoadNetwork:
             geom = LineString([(lon_u, lat_u), (lon_v, lat_v)])
         length = data.get("length")
         label = f"{u}->{v}:{key}"
-        network.add_segment(
-            _segment_from_linestring(
-                seg_id,
-                label,
-                geom,
-                node_map[str(u)],
-                node_map[str(v)],
-                float(length) if length is not None else None,
-            )
+        highway = str(data.get("highway") or "")
+        maxspeed = data.get("maxspeed")
+        maxspeed_kmh = None
+        if maxspeed is not None:
+            try:
+                maxspeed_kmh = float(str(maxspeed).split()[0])
+            except ValueError:
+                maxspeed_kmh = None
+        oneway = str(data.get("oneway", "true")).lower() in {"true", "yes", "1"}
+        seg = _segment_from_linestring(
+            seg_id,
+            label,
+            geom,
+            node_map[str(u)],
+            node_map[str(v)],
+            float(length) if length is not None else None,
         )
+        seg.highway = highway
+        seg.maxspeed_kmh = maxspeed_kmh
+        seg.oneway = oneway
+        network.add_segment(seg)
         seg_id += 1
     return network
 
@@ -196,6 +233,11 @@ def write_roadpack(network: RoadNetwork, path: Path) -> None:
         )
         # label may contain spaces — store on next line after marker
         lines.append(f"LABEL {seg.label}")
+        if seg.highway:
+            lines.append(f"HIGHWAY {seg.highway.replace(' ', '_')}")
+        if seg.maxspeed_kmh is not None:
+            lines.append(f"MAXSPEED {seg.maxspeed_kmh:.3f}")
+        lines.append(f"ONEWAY {1 if seg.oneway else 0}")
         for lon, lat in coords:
             lines.append(f"PT {lat:.8f} {lon:.8f}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -223,16 +265,41 @@ def load_roadpack(path: Path) -> RoadNetwork:
             heading = float(parts[5])
             n_pts = int(parts[6])
             i += 1
-            label = lines[i][6:] if lines[i].startswith("LABEL ") else f"{u}->{v}"
-            i += 1
+            label = lines[i][6:] if i < len(lines) and lines[i].startswith("LABEL ") else f"{u}->{v}"
+            if i < len(lines) and lines[i].startswith("LABEL "):
+                i += 1
+            highway = ""
+            maxspeed_kmh = None
+            oneway = True
             pts = []
-            for _ in range(n_pts):
+            while i < len(lines) and len(pts) < n_pts:
                 p = lines[i].split()
+                if not p:
+                    i += 1
+                    continue
+                if p[0] == "HIGHWAY" and len(p) > 1:
+                    highway = p[1]
+                    i += 1
+                    continue
+                if p[0] == "MAXSPEED" and len(p) > 1:
+                    maxspeed_kmh = float(p[1])
+                    i += 1
+                    continue
+                if p[0] == "ONEWAY" and len(p) > 1:
+                    oneway = p[1] != "0"
+                    i += 1
+                    continue
+                if p[0] != "PT":
+                    i += 1
+                    continue
                 pts.append((float(p[2]), float(p[1])))  # lon, lat
                 i += 1
             geom = LineString(pts)
             seg = _segment_from_linestring(seg_id, label, geom, u, v, length_m)
             seg.heading_rad = heading
+            seg.highway = highway
+            seg.maxspeed_kmh = maxspeed_kmh
+            seg.oneway = oneway
             network.add_segment(seg)
         else:
             i += 1

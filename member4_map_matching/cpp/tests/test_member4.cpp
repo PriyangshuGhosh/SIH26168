@@ -1,9 +1,12 @@
 #include "member4/MapMatchingEngine.hpp"
+#include "member4/region_catalog.hpp"
+#include "member4/roadpack_validate.hpp"
 
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -116,8 +119,35 @@ int main() {
     expect(distant.road_segment_id == 0, "no distant segment id");
     expect(std::abs(distant.lat_snapped - other_city.latitude) < 1e-12, "no city teleport lat");
     expect(std::abs(distant.lon_snapped - other_city.longitude) < 1e-12, "no city teleport lon");
+    expect(distant.match_status == sih26168::member4::MatchStatus::OutsideMap,
+           "distant status OUTSIDE_MAP");
+    expect(!distant.match_valid, "distant match_valid false");
+    expect(!distant.map_available, "distant map_available false");
     expect(engine.coversLocation(lat0, lon0), "origin inside pack bounds");
     expect(!engine.coversLocation(28.6139, 77.2090), "Delhi outside pack bounds");
+
+    NavigationState nan_state = makeState(0.0, lat0, lon0, 0.0, 16.0);
+    nan_state.latitude = std::numeric_limits<double>::quiet_NaN();
+    engine.reset();
+    auto nan_out = engine.match(nan_state);
+    expect(nan_out.match_status == sih26168::member4::MatchStatus::InvalidCoordinates,
+           "NaN coordinates rejected");
+    expect(std::abs(nan_out.lon_snapped - lon0) < 1e-12, "NaN path does not emit 0,0 lon");
+
+    sih26168::member4::RegionCatalog cat;
+    expect(cat.loadManifestFile("member4_map_matching/data/maps/manifest.json") ||
+               cat.loadManifestFile("data/maps/manifest.json"),
+           "load maps manifest");
+    if (!cat.regions().empty()) {
+        expect(cat.covers(lat0, lon0), "catalog covers origin");
+        expect(!cat.covers(28.6139, 77.2090), "catalog rejects other city");
+    expect(!sih26168::member4::RegionCatalog::safeRelativePath("../../x.roadpack"),
+               "reject deep path traversal");
+    }
+
+    auto val = sih26168::member4::validateRoadpackFile(pack);
+    expect(val.ok, "synthetic roadpack validates");
+    expect(val.edge_count > 0, "validator edge count");
 
     // Sliding window online API determinism vs batch for short window.
     engine.reset();

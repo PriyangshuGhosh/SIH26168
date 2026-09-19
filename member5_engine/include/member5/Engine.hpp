@@ -12,7 +12,6 @@
 
 #include <array>
 #include <atomic>
-#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -35,19 +34,10 @@ struct GnssSample {
     int num_sats;
 };
 
-inline sih26168::member3::GnssMeasurement toGnssMeasurement(
-    const GnssSample& sample) {
-    sih26168::member3::GnssMeasurement measurement{};
-    measurement.timestamp = sample.timestamp;
-    measurement.latitude = sample.lat;
-    measurement.longitude = sample.lon;
-    measurement.altitude = sample.alt;
-    measurement.speed_mps = sample.speed;
-    measurement.hdop = sample.hdop;
-    measurement.num_sats = sample.num_sats;
-    measurement.speed_valid = std::isfinite(sample.speed);
-    return measurement;
-}
+/* Maps a GNSS sample to the Member 3 measurement. Missing/invalid speed (NaN, negative or inf;
+   e.g. Android Location.hasSpeed() == false) becomes speed_valid = false so the EKF applies the
+   position only. A real 0.0 m/s (stationary) stays a valid speed measurement. */
+sih26168::member3::GnssMeasurement toGnssMeasurement(const GnssSample& s);
 
 class Engine {
 public:
@@ -77,10 +67,6 @@ public:
     IDRDiagnostics diagnostics() const;
     int speedIsValid() const;
 
-    void setSimulation(bool enabled);
-    bool isSimulation() const;
-    int debugInjectAiSpeed(double timestamp, double velocity_mps, double variance_m2s2);
-
     static bool mockSpeedRequested(const char* onnx_model_path);
 
 private:
@@ -95,12 +81,10 @@ private:
     void handleImu(const ImuSample& s);
     void pushAlignedSample(const float* ch6);
     void publishLocked();
-    void publishFromFusionState(); /* fusion_mu_ must be held */
     bool loadMap(const char* map_db_path);
     bool loadSpeed(const char* onnx_model_path);
     bool applyRoadpack(const std::string& path);
     void noteImuRate(double timestamp);
-    void maybeSelectMapFromGnss(double lat, double lon);
 
     SpscRing<ImuSample, 2048> imu_q_;
     SpscRing<GnssSample, 128> gnss_q_;
@@ -121,7 +105,6 @@ private:
     int stride_count_{0};
     int model_T_{200};
 
-    mutable std::mutex fusion_mu_;
     mutable std::mutex state_mu_;
     IDRNavigationOutput output_{};
     IDRDiagnostics diagnostics_{};
@@ -137,8 +120,6 @@ private:
     double last_ekf_speed_{0.0};
     double last_imu_t_{0.0};
     double last_gnss_t_{0.0};
-    double last_hdop_{99.0};
-    int last_num_sats_{0};
     double imu_hz_{0.0};
     double imu_rate_t_{0.0};
     int imu_rate_n_{0};
@@ -151,11 +132,6 @@ private:
     std::string last_error_;
     bool using_mock_speed_{false};
     bool catalog_mode_{false};
-    bool simulation_{false};
-    int gnss_quality_{0};
-    int prev_dead_reckoning_{1};
-    double skip_ai_until_t_{0.0};
-    mutable std::mutex map_mu_;
 };
 
 }  // namespace sih26168::member5

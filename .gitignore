@@ -23,3 +23,20 @@ app/.idea/
 app/.kotlin/
 onnxruntime.zip
 .cursor/
+demo/artifacts/*.png
+demo/artifacts/*.mp4
+!demo/artifacts/.gitkeep
+member6_mobile/.gradle/
+member6_mobile/build/
+member6_mobile/app/build/
+member6_mobile/local.properties
+member6_mobile/.idea/
+
+
+# Generated Android/native/build artifacts
+build-*/
+**/.pytest_cache/
+member6_mobile/**/.cxx/
+member6_mobile/**/*.apk
+member6_mobile/**/*.aab
+*.iml

@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""Optional OSM extract. Requires network + osmnx. Not used at runtime."""
+"""Optional OSM extract via Overpass. Caps radius. Never used at match time."""
 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from sih26168_map_matching.osm_overpass import download_overpass_xml, parse_osm_xml  # noqa: E402
+from sih26168_map_matching.region import bbox_from_point  # noqa: E402
+from sih26168_map_matching.road_graph import write_roadpack  # noqa: E402
+from sih26168_map_matching.road_data_manager import RoadDataManager  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Download a small drive network (OPTIONAL; needs internet/osmnx)."
-    )
-    parser.add_argument("--lat", type=float, default=12.9716)
-    parser.add_argument("--lon", type=float, default=77.5946)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lat", type=float, required=True)
+    parser.add_argument("--lon", type=float, required=True)
     parser.add_argument("--radius-m", type=float, default=400.0)
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(__file__).resolve().parents[2] / "data" / "small_road_network.graphml",
-    )
+    parser.add_argument("--max-radius-m", type=float, default=2500.0)
+    parser.add_argument("--catalog", type=Path, default=None)
+    parser.add_argument("--out-roadpack", type=Path, default=None)
     args = parser.parse_args()
-
-    try:
-        import osmnx as ox
-    except ImportError as exc:
-        raise SystemExit(
-            "osmnx is not installed. Install optionally with: pip install osmnx\n"
-            "Committed offline GraphML already exists for tests/runtime."
-        ) from exc
-
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    graph = ox.graph_from_point(
-        (args.lat, args.lon),
-        dist=args.radius_m,
-        network_type="drive",
-    )
-    ox.save_graphml(graph, args.out)
-    print(f"Saved {args.out} nodes={len(graph.nodes)} edges={len(graph.edges)}")
+    radius = min(args.radius_m, args.max_radius_m)
+    bbox = bbox_from_point(args.lat, args.lon, radius)
+    if args.catalog is not None:
+        mgr = RoadDataManager(args.catalog)
+        rid = mgr.download_bbox(*bbox)
+        print(f"installed {rid}")
+        return
+    xml = download_overpass_xml(*bbox)
+    net = parse_osm_xml(xml)
+    out = args.out_roadpack or Path("extracted.roadpack")
+    write_roadpack(net, out)
+    print(f"wrote {out} segments={len(net.segments)}")
 
 
 if __name__ == "__main__":

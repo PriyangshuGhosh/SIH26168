@@ -11,6 +11,8 @@ endif()
 
 add_library(member4_map_matching
   cpp/src/MapMatchingEngine.cpp
+  cpp/src/RegionCatalog.cpp
+  cpp/src/RoadpackValidate.cpp
 )
 
 add_library(sih26168::member4 ALIAS member4_map_matching)

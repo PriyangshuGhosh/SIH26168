@@ -124,6 +124,9 @@ private:
         const member3::NavigationState& nav,
         const Candidate* matched,
         const std::vector<Candidate>& candidates) const;
+
+    MapMatchedPosition passThrough(
+        const member3::NavigationState& nav, MatchStatus status) const;
 };
 
 }  // namespace sih26168::member4

@@ -1,19 +1,49 @@
 {
-  "version": 1,
+  "version": 2,
   "coordinate_reference": "EPSG:4326",
   "notes": "Demo catalog. Bounds come from the provisioned synthetic grid, not a city name in navigation logic.",
   "regions": [
     {
       "id": "synthetic_grid_demo",
       "roadpack": "../synthetic_grid.roadpack",
-      "min_lat": 12.97150,
-      "max_lat": 12.97380,
-      "min_lon": 77.59450,
-      "max_lon": 77.59690,
+      "min_lat": 12.9715,
+      "max_lat": 12.9738,
+      "min_lon": 77.5945,
+      "max_lon": 77.5969,
       "road_count": 48,
+      "node_count": 0,
       "version": "1",
-      "coordinate_reference": "EPSG:4326",
-      "built_at": "synthetic"
+      "source": "",
+      "license": "",
+      "checksum_sha256": "",
+      "created_at": "synthetic",
+      "downloaded_at": "",
+      "last_used_at": "",
+      "bytes": 5425,
+      "synthetic": true,
+      "attribution": "synthetic test grid",
+      "coordinate_reference": "EPSG:4326"
+    },
+    {
+      "id": "r_12p96830_77p59103_12p97503_77p59815",
+      "roadpack": "regions/r_12p96830_77p59103_12p97503_77p59815.roadpack",
+      "min_lat": 12.9683025,
+      "max_lat": 12.9750314,
+      "min_lon": 77.5910265,
+      "max_lon": 77.5981489,
+      "road_count": 80,
+      "node_count": 45,
+      "version": "1",
+      "source": "OpenStreetMap",
+      "license": "ODbL-1.0",
+      "checksum_sha256": "f4cef2ee1c107d28382cab145167647ae9562566db5009f366c427e5f696f3ce",
+      "created_at": "2026-09-19T07:55:30+00:00",
+      "downloaded_at": "2026-09-19T07:55:30+00:00",
+      "last_used_at": "2026-09-19T07:55:30+00:00",
+      "bytes": 18225,
+      "synthetic": false,
+      "attribution": "\u00a9 OpenStreetMap contributors",
+      "coordinate_reference": "EPSG:4326"
     }
   ]
 }

@@ -25,34 +25,30 @@ SpeedEstimate MockSpeedEstimator::predict(const float* samples_t6, int n_samples
     if (samples_t6 == nullptr || n_samples <= 0) {
         return out;
     }
-    /* samples_t6's accelerometer channels are Member 2's AlignedIMUFrame values verbatim, i.e.
-       already m/s^2 (Engine::handleImu no longer rescales them -- see the unit note there). */
-    double tail_ax_mps2 = 0.0;
+    double sum_ax = 0.0;
+    double tail_ax = 0.0;
     double sum_gyro = 0.0;
     const int tail = std::min(n_samples, 5);
     for (int i = 0; i < n_samples; ++i) {
-        const double ax_mps2 = static_cast<double>(samples_t6[i * 6 + 0]);
+        const double ax = static_cast<double>(samples_t6[i * 6 + 0]);
+        sum_ax += ax;
         sum_gyro += std::abs(static_cast<double>(samples_t6[i * 6 + 5]));
         if (i >= n_samples - tail) {
-            tail_ax_mps2 += ax_mps2;
+            tail_ax += ax;
         }
     }
     constexpr double kInferDt = 0.10; /* engine stride 10 at 100 Hz */
+    const double mean_ax = sum_ax / n_samples;
     const double mean_gyro = sum_gyro / n_samples;
-    const double ax_tail_mps2 = tail_ax_mps2 / static_cast<double>(tail);
-    /* ~0.8 m/s²: separates standstill/cruise coast from meaningful accel/brake. */
-    const bool quasi_static = std::abs(ax_tail_mps2) < 0.8 && mean_gyro < 0.15;
-    if (quasi_static) {
-        if (!have_v_) {
-            v_mps_ = 0.0f;
-            have_v_ = true;
-        }
+    if (std::abs(mean_ax) < 0.35 && mean_gyro < 0.15) {
+        v_mps_ = 0.0f;
+        have_v_ = true;
     } else if (!have_v_) {
-        v_mps_ = static_cast<float>(std::max(0.0, ax_tail_mps2 * kInferDt));
+        v_mps_ = static_cast<float>(std::max(0.0, mean_ax * kInferDt));
         have_v_ = true;
     } else {
-        v_mps_ = static_cast<float>(
-            std::max(0.0, static_cast<double>(v_mps_) + ax_tail_mps2 * kInferDt));
+        const double ax_tail = tail_ax / static_cast<double>(tail);
+        v_mps_ = static_cast<float>(std::max(0.0, static_cast<double>(v_mps_) + ax_tail * kInferDt));
     }
     out.velocity_mps = v_mps_;
     out.variance_m2s2 = 0.05f;
@@ -74,14 +70,6 @@ std::string lowerCopy(std::string s) {
 }
 
 bool nameIs(const std::string& n, const char* a) { return lowerCopy(n) == a; }
-
-/* Substring match: Member 1's real production output is "velocity_variance_m2s2"
-   (member1-ml/src/inference/export_onnx.py::OUTPUT_NAMES_UNCERTAINTY), which is not exactly
-   "velocity_variance" or "variance" -- an exact-match check would silently miss it and fall back
-   to the hardcoded default variance below, discarding Member 1's real uncertainty output. */
-bool nameContains(const std::string& n, const char* needle) {
-    return lowerCopy(n).find(needle) != std::string::npos;
-}
 
 }  // namespace
 
@@ -239,7 +227,7 @@ SpeedEstimate OnnxSpeedEstimator::predict(const float* samples_t6, int n_samples
                 have_vel = true;
             } else if (nameIs(nm, "uncertainty")) {
                 sigma = v;
-            } else if (nameContains(nm, "variance")) {
+            } else if (nameIs(nm, "velocity_variance") || nameIs(nm, "variance")) {
                 var = v;
             }
         }
