@@ -1,0 +1,7 @@
+{"type":"gnss","t":0.0,"lat":12.9716,"lon":77.5946,"alt":900,"speed":12,"hdop":1,"sats":10}
+{"type":"imu","t":0.01,"ax":0.4,"ay":0,"az":9.81,"gx":0,"gy":0,"gz":0}
+{"type":"outage","t":1.0,"active":true}
+{"type":"imu","t":1.05,"ax":0.4,"ay":0,"az":9.81,"gx":0,"gy":0,"gz":0}
+{"type":"imu","t":2.0,"ax":0.4,"ay":0,"az":9.81,"gx":0,"gy":0,"gz":0}
+{"type":"outage","t":3.0,"active":false}
+{"type":"gnss","t":3.0,"lat":12.9717,"lon":77.5946,"alt":900,"speed":12,"hdop":1,"sats":10}
