@@ -1,0 +1,60 @@
+Performing C++ SOURCE FILE Test CMAKE_HAVE_LIBC_PTHREAD failed with the following output:
+Change Dir: /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja cmTC_fa0fe && [1/2] Building CXX object CMakeFiles/cmTC_fa0fe.dir/src.cxx.o
+FAILED: CMakeFiles/cmTC_fa0fe.dir/src.cxx.o 
+/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DCMAKE_HAVE_LIBC_PTHREAD  -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security    -fPIE -std=c++20 -MD -MT CMakeFiles/cmTC_fa0fe.dir/src.cxx.o -MF CMakeFiles/cmTC_fa0fe.dir/src.cxx.o.d -o CMakeFiles/cmTC_fa0fe.dir/src.cxx.o -c /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/CMakeFiles/CMakeTmp/src.cxx
+/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/CMakeFiles/CMakeTmp/src.cxx:13:3: error: use of undeclared identifier 'pthread_cancel'
+  pthread_cancel(thread);
+  ^
+1 error generated.
+ninja: build stopped: subcommand failed.
+
+
+Source file was:
+#include <pthread.h>
+
+static void* test_func(void* data)
+{
+  return data;
+}
+
+int main(void)
+{
+  pthread_t thread;
+  pthread_create(&thread, NULL, test_func, NULL);
+  pthread_detach(thread);
+  pthread_cancel(thread);
+  pthread_join(thread, NULL);
+  pthread_atfork(NULL, NULL, NULL);
+  pthread_exit(NULL);
+
+  return 0;
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja cmTC_4e0e9 && [1/2] Building CXX object CMakeFiles/cmTC_4e0e9.dir/CheckFunctionExists.cxx.o
+[2/2] Linking CXX executable cmTC_4e0e9
+FAILED: cmTC_4e0e9 
+: && /home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -DCHECK_FUNCTION_EXISTS=pthread_create -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments CMakeFiles/cmTC_4e0e9.dir/CheckFunctionExists.cxx.o -o cmTC_4e0e9  -lpthreads  -latomic -lm && :
+ld.lld: error: unable to find library -lpthreads
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+
+
+
+Determining if the function pthread_create exists in the pthread failed with the following output:
+Change Dir: /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja cmTC_3d5b8 && [1/2] Building CXX object CMakeFiles/cmTC_3d5b8.dir/CheckFunctionExists.cxx.o
+[2/2] Linking CXX executable cmTC_3d5b8
+FAILED: cmTC_3d5b8 
+: && /home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -DCHECK_FUNCTION_EXISTS=pthread_create -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments CMakeFiles/cmTC_3d5b8.dir/CheckFunctionExists.cxx.o -o cmTC_3d5b8  -lpthread  -latomic -lm && :
+ld.lld: error: unable to find library -lpthread
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+
+
+

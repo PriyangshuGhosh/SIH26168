@@ -24,7 +24,7 @@ This is an engineering status report. Unverified items are **NOT VALIDATED**.
 | 13 | Lifecycle / permissions | Sensors onStart/onStop; FINE/COARSE location |
 | 14 | Thread-safe JNI POD | Mutex + field copies, not packed-struct FFI |
 | 15 | Logging / replay / experiment | JSONL logger + `ReplayParser` / `FakeEnginePort` e2e unit test |
-| 16 | `assembleDebug` arm64-v8a + unit tests | See build log for this PR. Device run **NOT VALIDATED** |
+| 16 | `assembleDebug` arm64-v8a + unit tests | **PASS** this run: `lib/arm64-v8a/libidr_jni.so` in debug APK; `testDebugUnitTest` 8 tests. Device run **NOT VALIDATED** |
 
 ## What was not claimed
 

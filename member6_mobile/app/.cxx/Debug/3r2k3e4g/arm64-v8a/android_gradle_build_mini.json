@@ -1,0 +1,93 @@
+{
+  "buildFiles": [
+    "/workspace/CMakeLists.txt",
+    "/workspace/member2_alignment/CMakeLists.txt",
+    "/workspace/member3_fusion/CMakeLists.txt",
+    "/workspace/member4_map_matching/CMakeLists.txt",
+    "/workspace/member5_engine/CMakeLists.txt",
+    "/workspace/member6_mobile/app/src/main/cpp/CMakeLists.txt",
+    "/workspace/sih26168_v2x/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "member3_fusion::@5b35ded4e672e2cc1724": {
+      "artifactName": "member3_fusion",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member3_fusion/libmember3_fusion.a",
+      "runtimeFiles": []
+    },
+    "member4_map_matching::@42ce7399ed898077e1d5": {
+      "artifactName": "member4_map_matching",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member4_map_matching/libmember4_map_matching.a",
+      "runtimeFiles": []
+    },
+    "idr_engine::@70f76343ea33414f4ab7": {
+      "artifactName": "idr_engine",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/libidr_engine.so",
+      "runtimeFiles": []
+    },
+    "member5_cpp_tests::@70f76343ea33414f4ab7": {
+      "artifactName": "member5_cpp_tests",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_cpp_tests",
+      "runtimeFiles": []
+    },
+    "member2_alignment::@8710353dc3dcecf6fa3e": {
+      "artifactName": "member2_alignment",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member2_alignment/libmember2_alignment.a",
+      "runtimeFiles": []
+    },
+    "member5_benchmark::@70f76343ea33414f4ab7": {
+      "artifactName": "member5_benchmark",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_benchmark",
+      "runtimeFiles": []
+    },
+    "member5_synthetic_e2e::@70f76343ea33414f4ab7": {
+      "artifactName": "member5_synthetic_e2e",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_synthetic_e2e",
+      "runtimeFiles": []
+    },
+    "member5_demo::@70f76343ea33414f4ab7": {
+      "artifactName": "member5_demo",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_demo",
+      "runtimeFiles": []
+    },
+    "sih26168_v2x::@d57b9d24d12e53340b34": {
+      "artifactName": "sih26168_v2x",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/sih26168_v2x/libsih26168_v2x.a",
+      "runtimeFiles": []
+    },
+    "idr_jni::@6890427a1f51a3e7e1df": {
+      "artifactName": "idr_jni",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/libidr_jni.so",
+      "runtimeFiles": []
+    },
+    "idr_engine_static::@70f76343ea33414f4ab7": {
+      "artifactName": "idr_engine_static",
+      "abi": "arm64-v8a",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member5_engine/libidr_engine_static.a",
+      "runtimeFiles": []
+    }
+  }
+}

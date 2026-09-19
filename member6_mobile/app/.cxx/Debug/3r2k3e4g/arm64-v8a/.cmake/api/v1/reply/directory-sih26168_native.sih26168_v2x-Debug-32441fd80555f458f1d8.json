@@ -1,0 +1,104 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install"
+		],
+		"files" : 
+		[
+			"/workspace/sih26168_v2x/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 37,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 39,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 40,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 49,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"sih26168_native/sih26168_v2x/libsih26168_v2x.a"
+			],
+			"targetId" : "sih26168_v2x::@d57b9d24d12e53340b34",
+			"targetIndex" : 10,
+			"type" : "target"
+		},
+		{
+			"backtrace" : 2,
+			"component" : "Unspecified",
+			"destination" : "include",
+			"paths" : 
+			[
+				{
+					"from" : "/workspace/sih26168_v2x/include",
+					"to" : "."
+				}
+			],
+			"type" : "directory"
+		},
+		{
+			"backtrace" : 3,
+			"component" : "Unspecified",
+			"destination" : "lib/cmake/sih26168_v2x",
+			"exportName" : "sih26168_v2xTargets",
+			"exportTargets" : 
+			[
+				{
+					"id" : "sih26168_v2x::@d57b9d24d12e53340b34",
+					"index" : 10
+				}
+			],
+			"paths" : 
+			[
+				"sih26168_native/sih26168_v2x/CMakeFiles/Export/lib/cmake/sih26168_v2x/sih26168_v2xTargets.cmake"
+			],
+			"type" : "export"
+		},
+		{
+			"backtrace" : 4,
+			"component" : "Unspecified",
+			"destination" : "lib/cmake/sih26168_v2x",
+			"paths" : 
+			[
+				"/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/sih26168_v2x/sih26168_v2xConfig.cmake"
+			],
+			"type" : "file"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "sih26168_native/sih26168_v2x",
+		"source" : "/workspace/sih26168_v2x"
+	}
+}

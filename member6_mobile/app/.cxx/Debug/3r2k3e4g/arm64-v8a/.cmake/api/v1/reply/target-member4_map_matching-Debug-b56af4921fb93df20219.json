@@ -1,0 +1,172 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "sih26168_native/member4_map_matching/libmember4_map_matching.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_link_libraries",
+			"target_compile_options",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"/workspace/member4_map_matching/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 12,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 26,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 34,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 21,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC"
+				},
+				{
+					"backtrace" : 3,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 3,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 3,
+					"fragment" : "-Wpedantic"
+				},
+				{
+					"fragment" : "-std=c++20"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 4,
+					"path" : "/workspace/member4_map_matching/cpp/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member3_fusion/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member2_alignment/cpp/include"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "20"
+			},
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2
+			],
+			"sysroot" : 
+			{
+				"path" : "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+			}
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 2,
+			"id" : "member3_fusion::@5b35ded4e672e2cc1724"
+		},
+		{
+			"backtrace" : 2,
+			"id" : "member2_alignment::@8710353dc3dcecf6fa3e"
+		}
+	],
+	"id" : "member4_map_matching::@42ce7399ed898077e1d5",
+	"name" : "member4_map_matching",
+	"nameOnDisk" : "libmember4_map_matching.a",
+	"paths" : 
+	{
+		"build" : "sih26168_native/member4_map_matching",
+		"source" : "/workspace/member4_map_matching"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "/workspace/member4_map_matching/cpp/src/MapMatchingEngine.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "/workspace/member4_map_matching/cpp/src/RegionCatalog.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "/workspace/member4_map_matching/cpp/src/RoadpackValidate.cpp",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

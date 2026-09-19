@@ -1,0 +1,207 @@
+{
+	"artifacts" : 
+	[
+		{
+			"path" : "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_cpp_tests"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_executable",
+			"target_link_libraries",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"/workspace/member5_engine/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 120,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 121,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 122,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIE"
+				},
+				{
+					"backtrace" : 2,
+					"fragment" : "-pthread"
+				},
+				{
+					"fragment" : "-std=c++20"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 2,
+					"define" : "IDR_ENGINE_STATIC"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 3,
+					"path" : "/workspace/member5_engine/tests"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member5_engine/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member2_alignment/cpp/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member3_fusion/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/workspace/member4_map_matching/cpp/include"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "20"
+			},
+			"sourceIndexes" : 
+			[
+				0
+			],
+			"sysroot" : 
+			{
+				"path" : "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+			}
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 2,
+			"id" : "idr_engine_static::@70f76343ea33414f4ab7"
+		},
+		{
+			"backtrace" : 2,
+			"id" : "member3_fusion::@5b35ded4e672e2cc1724"
+		},
+		{
+			"backtrace" : 2,
+			"id" : "member4_map_matching::@42ce7399ed898077e1d5"
+		},
+		{
+			"backtrace" : 2,
+			"id" : "member2_alignment::@8710353dc3dcecf6fa3e"
+		}
+	],
+	"id" : "member5_cpp_tests::@70f76343ea33414f4ab7",
+	"link" : 
+	{
+		"commandFragments" : 
+		[
+			{
+				"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info",
+				"role" : "flags"
+			},
+			{
+				"fragment" : "-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments",
+				"role" : "flags"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "sih26168_native/member5_engine/libidr_engine_static.a",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "sih26168_native/member4_map_matching/libmember4_map_matching.a",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "sih26168_native/member3_fusion/libmember3_fusion.a",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "sih26168_native/member2_alignment/libmember2_alignment.a",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "-pthread",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "-latomic -lm",
+				"role" : "libraries"
+			}
+		],
+		"language" : "CXX",
+		"sysroot" : 
+		{
+			"path" : "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+		}
+	},
+	"name" : "member5_cpp_tests",
+	"nameOnDisk" : "member5_cpp_tests",
+	"paths" : 
+	{
+		"build" : "sih26168_native/member5_engine",
+		"source" : "/workspace/member5_engine"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "/workspace/member5_engine/tests/test_member5.cpp",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "EXECUTABLE"
+}

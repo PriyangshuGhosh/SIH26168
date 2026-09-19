@@ -52,16 +52,16 @@ class OutageAndReplayTest {
         val tr = OutageTracker()
         tr.noteRawGps(0.0, 12.9716, 77.5946, feedToEngine = true)
         tr.noteEstimate(1.0, 12.9716, 77.5946, deadReckoning = true, simulatedOutage = true)
-        tr.noteEstimate(5.0, 12.9720, 77.5946, deadReckoning = true, simulatedOutage = true)
-        tr.noteEstimate(6.0, 12.9720, 77.5946, deadReckoning = false, simulatedOutage = false)
-        val rec = tr.noteRawGps(6.1, 12.9718, 77.5946, feedToEngine = true)
+        tr.noteEstimate(5.0, 12.9730, 77.5946, deadReckoning = true, simulatedOutage = true)
+        tr.noteEstimate(6.0, 12.9730, 77.5946, deadReckoning = false, simulatedOutage = false)
+        val rec = tr.noteRawGps(6.1, 12.9717, 77.5946, feedToEngine = true)
         assertTrue(rec != null)
-        val expected = Geodesic.haversineMeters(12.9720, 77.5946, 12.9718, 77.5946)
+        val expected = Geodesic.haversineMeters(12.9730, 77.5946, 12.9717, 77.5946)
         assertEquals(expected, rec!!.finalDriftMeters, 1e-6)
         val gpsGap = rec.gpsDisplacementDuringOutageMeters!!
-        val lastGpsVsNew = Geodesic.haversineMeters(12.9716, 77.5946, 12.9718, 77.5946)
+        val lastGpsVsNew = Geodesic.haversineMeters(12.9716, 77.5946, 12.9717, 77.5946)
         assertEquals(lastGpsVsNew, gpsGap, 1e-6)
-        assertTrue(abs(rec.finalDriftMeters - gpsGap) > 1.0)
+        assertTrue(abs(rec.finalDriftMeters - gpsGap) > 50.0)
     }
 
     @Test

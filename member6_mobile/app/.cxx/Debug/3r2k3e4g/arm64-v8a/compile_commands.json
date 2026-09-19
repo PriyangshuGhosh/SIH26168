@@ -1,0 +1,142 @@
+[
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -Didr_jni_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -I/workspace/sih26168_v2x/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -pthread -std=gnu++20 -o CMakeFiles/idr_jni.dir/idr_jni.cpp.o -c /workspace/member6_mobile/app/src/main/cpp/idr_jni.cpp",
+  "file": "/workspace/member6_mobile/app/src/main/cpp/idr_jni.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -Didr_jni_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -I/workspace/sih26168_v2x/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -pthread -std=gnu++20 -o CMakeFiles/idr_jni.dir/v2x_jni.cpp.o -c /workspace/member6_mobile/app/src/main/cpp/v2x_jni.cpp",
+  "file": "/workspace/member6_mobile/app/src/main/cpp/v2x_jni.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/member2_alignment/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/member2_alignment/CMakeFiles/member2_alignment.dir/cpp/src/FrameAligner.cpp.o -c /workspace/member2_alignment/cpp/src/FrameAligner.cpp",
+  "file": "/workspace/member2_alignment/cpp/src/FrameAligner.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/member3_fusion/include -I/workspace/member2_alignment/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/member3_fusion/CMakeFiles/member3_fusion.dir/src/EKFFusionEngine.cpp.o -c /workspace/member3_fusion/src/EKFFusionEngine.cpp",
+  "file": "/workspace/member3_fusion/src/EKFFusionEngine.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/member4_map_matching/cpp/include -I/workspace/member3_fusion/include -I/workspace/member2_alignment/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/member4_map_matching/CMakeFiles/member4_map_matching.dir/cpp/src/MapMatchingEngine.cpp.o -c /workspace/member4_map_matching/cpp/src/MapMatchingEngine.cpp",
+  "file": "/workspace/member4_map_matching/cpp/src/MapMatchingEngine.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/member4_map_matching/cpp/include -I/workspace/member3_fusion/include -I/workspace/member2_alignment/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/member4_map_matching/CMakeFiles/member4_map_matching.dir/cpp/src/RegionCatalog.cpp.o -c /workspace/member4_map_matching/cpp/src/RegionCatalog.cpp",
+  "file": "/workspace/member4_map_matching/cpp/src/RegionCatalog.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/member4_map_matching/cpp/include -I/workspace/member3_fusion/include -I/workspace/member2_alignment/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/member4_map_matching/CMakeFiles/member4_map_matching.dir/cpp/src/RoadpackValidate.cpp.o -c /workspace/member4_map_matching/cpp/src/RoadpackValidate.cpp",
+  "file": "/workspace/member4_map_matching/cpp/src/RoadpackValidate.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine_static.dir/src/SpeedEstimator.cpp.o -c /workspace/member5_engine/src/SpeedEstimator.cpp",
+  "file": "/workspace/member5_engine/src/SpeedEstimator.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine_static.dir/src/SpeedValidity.cpp.o -c /workspace/member5_engine/src/SpeedValidity.cpp",
+  "file": "/workspace/member5_engine/src/SpeedValidity.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine_static.dir/src/MapCatalog.cpp.o -c /workspace/member5_engine/src/MapCatalog.cpp",
+  "file": "/workspace/member5_engine/src/MapCatalog.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine_static.dir/src/Engine.cpp.o -c /workspace/member5_engine/src/Engine.cpp",
+  "file": "/workspace/member5_engine/src/Engine.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine_static.dir/src/idr_engine_api.cpp.o -c /workspace/member5_engine/src/idr_engine_api.cpp",
+  "file": "/workspace/member5_engine/src/idr_engine_api.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_EXPORTS -Didr_engine_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine.dir/src/SpeedEstimator.cpp.o -c /workspace/member5_engine/src/SpeedEstimator.cpp",
+  "file": "/workspace/member5_engine/src/SpeedEstimator.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_EXPORTS -Didr_engine_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine.dir/src/SpeedValidity.cpp.o -c /workspace/member5_engine/src/SpeedValidity.cpp",
+  "file": "/workspace/member5_engine/src/SpeedValidity.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_EXPORTS -Didr_engine_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine.dir/src/MapCatalog.cpp.o -c /workspace/member5_engine/src/MapCatalog.cpp",
+  "file": "/workspace/member5_engine/src/MapCatalog.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_EXPORTS -Didr_engine_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine.dir/src/Engine.cpp.o -c /workspace/member5_engine/src/Engine.cpp",
+  "file": "/workspace/member5_engine/src/Engine.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_EXPORTS -Didr_engine_EXPORTS -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/idr_engine.dir/src/idr_engine_api.cpp.o -c /workspace/member5_engine/src/idr_engine_api.cpp",
+  "file": "/workspace/member5_engine/src/idr_engine_api.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/tests -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIE -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/member5_cpp_tests.dir/tests/test_member5.cpp.o -c /workspace/member5_engine/tests/test_member5.cpp",
+  "file": "/workspace/member5_engine/tests/test_member5.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/tests -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIE -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/member5_benchmark.dir/tools/benchmark.cpp.o -c /workspace/member5_engine/tools/benchmark.cpp",
+  "file": "/workspace/member5_engine/tools/benchmark.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/tests -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIE -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/member5_demo.dir/tools/demo.cpp.o -c /workspace/member5_engine/tools/demo.cpp",
+  "file": "/workspace/member5_engine/tools/demo.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -DIDR_ENGINE_STATIC -I/workspace/member5_engine/tests -I/workspace/member5_engine/include -I/workspace/member2_alignment/cpp/include -I/workspace/member3_fusion/include -I/workspace/member4_map_matching/cpp/include -isystem /workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/_deps/eigen-src -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIE -pthread -std=c++20 -o sih26168_native/member5_engine/CMakeFiles/member5_synthetic_e2e.dir/tools/synthetic_e2e.cpp.o -c /workspace/member5_engine/tools/synthetic_e2e.cpp",
+  "file": "/workspace/member5_engine/tools/synthetic_e2e.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/frames.cpp.o -c /workspace/sih26168_v2x/src/frames.cpp",
+  "file": "/workspace/sih26168_v2x/src/frames.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/timestamp.cpp.o -c /workspace/sih26168_v2x/src/timestamp.cpp",
+  "file": "/workspace/sih26168_v2x/src/timestamp.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/validation.cpp.o -c /workspace/sih26168_v2x/src/validation.cpp",
+  "file": "/workspace/sih26168_v2x/src/validation.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/security.cpp.o -c /workspace/sih26168_v2x/src/security.cpp",
+  "file": "/workspace/sih26168_v2x/src/security.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/transport.cpp.o -c /workspace/sih26168_v2x/src/transport.cpp",
+  "file": "/workspace/sih26168_v2x/src/transport.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/measurement.cpp.o -c /workspace/sih26168_v2x/src/measurement.cpp",
+  "file": "/workspace/sih26168_v2x/src/measurement.cpp"
+},
+{
+  "directory": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+  "command": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I/workspace/sih26168_v2x/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -std=c++20 -o sih26168_native/sih26168_v2x/CMakeFiles/sih26168_v2x.dir/src/core.cpp.o -c /workspace/sih26168_v2x/src/core.cpp",
+  "file": "/workspace/sih26168_v2x/src/core.cpp"
+}
+]

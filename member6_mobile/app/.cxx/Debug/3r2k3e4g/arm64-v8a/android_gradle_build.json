@@ -1,0 +1,109 @@
+{
+  "buildFiles": [
+    "/workspace/CMakeLists.txt",
+    "/workspace/member2_alignment/CMakeLists.txt",
+    "/workspace/member3_fusion/CMakeLists.txt",
+    "/workspace/member4_map_matching/CMakeLists.txt",
+    "/workspace/member5_engine/CMakeLists.txt",
+    "/workspace/member6_mobile/app/src/main/cpp/CMakeLists.txt",
+    "/workspace/sih26168_v2x/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/ubuntu/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "idr_engine::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "idr_engine",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/libidr_engine.so",
+      "runtimeFiles": []
+    },
+    "idr_engine_static::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "idr_engine_static",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member5_engine/libidr_engine_static.a"
+    },
+    "idr_jni::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "idr_jni",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/libidr_jni.so",
+      "runtimeFiles": []
+    },
+    "member2_alignment::@8710353dc3dcecf6fa3e": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member2_alignment",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member2_alignment/libmember2_alignment.a"
+    },
+    "member3_fusion::@5b35ded4e672e2cc1724": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member3_fusion",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member3_fusion/libmember3_fusion.a"
+    },
+    "member4_map_matching::@42ce7399ed898077e1d5": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member4_map_matching",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/member4_map_matching/libmember4_map_matching.a"
+    },
+    "member5_benchmark::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member5_benchmark",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_benchmark",
+      "runtimeFiles": []
+    },
+    "member5_cpp_tests::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member5_cpp_tests",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_cpp_tests",
+      "runtimeFiles": []
+    },
+    "member5_demo::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member5_demo",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_demo",
+      "runtimeFiles": []
+    },
+    "member5_synthetic_e2e::@70f76343ea33414f4ab7": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "member5_synthetic_e2e",
+      "output": "/workspace/member6_mobile/app/build/intermediates/cxx/Debug/3r2k3e4g/obj/arm64-v8a/member5_synthetic_e2e",
+      "runtimeFiles": []
+    },
+    "sih26168_v2x::@d57b9d24d12e53340b34": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "sih26168_v2x",
+      "output": "/workspace/member6_mobile/app/.cxx/Debug/3r2k3e4g/arm64-v8a/sih26168_native/sih26168_v2x/libsih26168_v2x.a"
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/home/ubuntu/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}
