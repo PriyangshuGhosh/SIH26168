@@ -154,6 +154,10 @@ class MainActivity : ComponentActivity(), LocationListener {
         val speed = if (location.hasSpeed()) location.speed.toDouble() else Double.NaN
         val feed = !vm.state.value.simulateOutage && !vm.state.value.replayActive
         val hdop = if (location.hasAccuracy()) (location.accuracy / 5.0).toDouble() else 1.0
+        // Sample the engine estimate BEFORE the fix is fed: feeding snaps the output to GNSS.
+        val preFeedEstimate = if (feed) {
+            EngineBridge.poll()?.let { GeoPoint(it.timestamp, it.lat, it.lon) }
+        } else null
         if (feed) {
             EngineBridge.selectMap(location.latitude, location.longitude)
             EngineBridge.feedGnss(
@@ -163,7 +167,7 @@ class MainActivity : ComponentActivity(), LocationListener {
             sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, if (speed.isFinite()) speed else 0.0, hdop, 8)
         }
         vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(),
-            if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed)
+            if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed, preFeedEstimate)
         roadMgr.selectForLocation(location.latitude, location.longitude)
         vm.setStorage(roadMgr.storageInfo())
         if (!roadsLoaded) {
