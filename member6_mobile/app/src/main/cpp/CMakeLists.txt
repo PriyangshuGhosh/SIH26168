@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 project(idr_jni LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
-add_library(idr_jni SHARED idr_jni.cpp)
-target_include_directories(idr_jni PRIVATE ${IDR_ENGINE_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../member5_engine/include)
-# Prefer a prebuilt libidr_engine.so from the Member 5 Android build.
-if(DEFINED IDR_ENGINE_SO)
-  target_link_libraries(idr_jni PRIVATE ${IDR_ENGINE_SO})
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(SIH26168_BUILD_HOST_TOOLS OFF CACHE BOOL "" FORCE)
+set(SIH26168_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../..")
+if(NOT EXISTS "${SIH26168_ROOT}/CMakeLists.txt")
+  message(FATAL_ERROR "SIH26168 root not found at ${SIH26168_ROOT}")
 endif()
+add_subdirectory("${SIH26168_ROOT}" "${CMAKE_BINARY_DIR}/sih26168_native")
+
+add_library(idr_jni SHARED idr_jni.cpp v2x_jni.cpp)
+target_compile_features(idr_jni PRIVATE cxx_std_20)
+target_link_libraries(idr_jni PRIVATE idr_engine_static sih26168::v2x android log)
