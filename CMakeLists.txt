@@ -38,3 +38,8 @@ if(SIH26168_BUILD_MEMBER5)
   endif()
   add_subdirectory(member5_engine)
 endif()
+
+option(SIH26168_BUILD_V2X "Build MODE A V2X cooperative-localization library" ON)
+if(SIH26168_BUILD_V2X)
+  add_subdirectory(sih26168_v2x)
+endif()

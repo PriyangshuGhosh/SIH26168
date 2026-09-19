@@ -23,3 +23,6 @@ app/.idea/
 app/.kotlin/
 onnxruntime.zip
 .cursor/
+demo/artifacts/*.png
+demo/artifacts/*.mp4
+!demo/artifacts/.gitkeep
