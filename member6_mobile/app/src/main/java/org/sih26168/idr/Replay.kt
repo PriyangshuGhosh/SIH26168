@@ -16,7 +16,7 @@ data class ReplayEvent(
     val lat: Double = Double.NaN,
     val lon: Double = Double.NaN,
     val alt: Double = 0.0,
-    val speed: Double = 0.0,
+    val speed: Double = Double.NaN, /* NaN = no speed reported (unknown, not 0 m/s) */
     val hdop: Double = 1.0,
     val sats: Int = 8,
     val outage: Boolean = false
@@ -61,7 +61,7 @@ object ReplayParser {
                     gy = num("gy").takeIf { it.isFinite() } ?: 0.0,
                     gz = num("gz").takeIf { it.isFinite() } ?: 0.0,
                     lat = num("lat"), lon = num("lon"), alt = num("alt").takeIf { it.isFinite() } ?: 0.0,
-                    speed = num("speed").takeIf { it.isFinite() } ?: 0.0,
+                    speed = num("speed"),
                     hdop = num("hdop").takeIf { it.isFinite() } ?: 1.0,
                     sats = num("sats").toInt().takeIf { it > 0 } ?: 8,
                     outage = bool("active") || type == "outage" && bool("outage")
@@ -82,7 +82,8 @@ class SessionLogger(private val file: File) {
         append("""{"type":"imu","t":$t,"ax":$ax,"ay":$ay,"az":$az,"gx":$gx,"gy":$gy,"gz":$gz}""")
     }
     fun gnss(t: Double, lat: Double, lon: Double, alt: Double, speed: Double, hdop: Double, sats: Int) {
-        append("""{"type":"gnss","t":$t,"lat":$lat,"lon":$lon,"alt":$alt,"speed":$speed,"hdop":$hdop,"sats":$sats}""")
+        val speedField = if (speed.isFinite()) ""","speed":$speed""" else "" // omitted = unknown
+        append("""{"type":"gnss","t":$t,"lat":$lat,"lon":$lon,"alt":$alt$speedField,"hdop":$hdop,"sats":$sats}""")
     }
     fun outage(t: Double, active: Boolean) {
         append("""{"type":"outage","t":$t,"active":$active}""")
