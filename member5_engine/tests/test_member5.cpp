@@ -2,6 +2,7 @@
 #include "member2/FrameAligner.hpp"
 #include "member3/EKFFusionEngine.hpp"
 #include "member4/MapMatchingEngine.hpp"
+#include "member5/Engine.hpp"
 #include "member5/GnssDeficitMachine.hpp"
 #include "member5/SpscRing.hpp"
 #include "member5/ImuTimestampPairer.hpp"
