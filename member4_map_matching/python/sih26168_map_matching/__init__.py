@@ -1,7 +1,7 @@
-"""Offline HMM map matching (Member 4) reference implementation."""
-
 from .types import MapMatchedPosition, NavigationState, RoadCandidate
 from .map_matcher import MapMatcher, MapMatcherConfig
+from .region import MapRegion, find_covering
+from .road_data_manager import DownloadState, RoadDataManager
 
 __all__ = [
     "MapMatchedPosition",
@@ -9,6 +9,10 @@ __all__ = [
     "RoadCandidate",
     "MapMatcher",
     "MapMatcherConfig",
+    "MapRegion",
+    "find_covering",
+    "DownloadState",
+    "RoadDataManager",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
