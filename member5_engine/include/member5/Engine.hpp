@@ -34,6 +34,11 @@ struct GnssSample {
     int num_sats;
 };
 
+/* Maps a GNSS sample to the Member 3 measurement. Missing/invalid speed (NaN, negative or inf;
+   e.g. Android Location.hasSpeed() == false) becomes speed_valid = false so the EKF applies the
+   position only. A real 0.0 m/s (stationary) stays a valid speed measurement. */
+sih26168::member3::GnssMeasurement toGnssMeasurement(const GnssSample& s);
+
 class Engine {
 public:
     Engine();
