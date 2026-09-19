@@ -1,29 +1,29 @@
 # Member 4 status
 
-## Checklist (gate audit)
+## Gate audit
 
 | Item | Status |
 |---|---|
-| OSM extraction / preprocessing | IMPLEMENTED — `python/tools/extract_osm.py` (optional network); committed offline `data/small_road_network.graphml` |
-| Offline road graph | IMPLEMENTED+TESTED — GraphML / GeoJSON / `.roadpack` / SQLite loaders + synthetic grid |
-| Spatial index / R-tree | IMPLEMENTED+TESTED — SQLite R*Tree (Python) + in-memory AABB (Python/C++); parity test |
-| Candidate generation | IMPLEMENTED+TESTED — uncertainty-aware radius + distance filter |
-| Emission probability | IMPLEMENTED+TESTED — log-Gaussian distance / heading |
-| Transition probability | IMPLEMENTED+TESTED — network vs observed displacement + heading |
-| Sliding-window Viterbi | IMPLEMENTED+TESTED — online window + batch trajectory decode |
-| Confidence score | IMPLEMENTED+TESTED — softmax over candidates; uncertainty softening |
-| On-road / off-road status | IMPLEMENTED+TESTED — fail-safe pass-through when weak |
-| Deterministic test dataset | IMPLEMENTED+TESTED — synthetic grid + GraphML fixture |
-| Accuracy benchmark | IMPLEMENTED+TESTED — **SYNTHETIC VALIDATION ONLY** (`evaluate_accuracy.py`) |
-| Runtime benchmark | IMPLEMENTED+TESTED (desktop Python/C++); **ANDROID PERFORMANCE: NOT VALIDATED** |
-| Python reference | IMPLEMENTED+TESTED — `sih26168_map_matching` package |
-| C++ runtime | IMPLEMENTED+TESTED — `MapMatchingEngine` + roadpack loader |
-| Member 3 integration | IMPLEMENTED+TESTED — consumes `member3::NavigationState` (C++ include + Python mirror) |
-| Member 5/6 output interface | IMPLEMENTED — Member 5 production path calls `MapMatchingEngine` on `.roadpack` |
-| Documentation | IMPLEMENTED — README, ALGORITHM, INTEGRATION, STATUS |
+| HMM matcher (existing) | VALIDATED (synthetic + committed OSM extract, host tests) |
+| Real OSM GraphML → roadpack | VALIDATED (offline install of `small_road_network.graphml`) |
+| Live Overpass download | NOT VALIDATED (API exists; no live fetch recorded this run) |
+| Multi-region catalog | VALIDATED (unit tests + `data/maps/manifest.json`) |
+| Location-based select | VALIDATED (smallest covering bbox) |
+| Atomic install / failed download | VALIDATED (Python tests; mocked HTTP) |
+| Storage LRU | VALIDATED (unit test) |
+| Boundary prefetch logic | PARTIAL (neighbor bbox enqueue; no driving trace) |
+| Offline match after install | VALIDATED (fetcher disabled after install) |
+| OUTSIDE_MAP / no 0,0 snap | VALIDATED |
+| Member 5 ABI fields 1–7 | VALIDATED (unchanged order) |
+| Extra match status fields | VALIDATED (C++/Python; Member 5 does not copy them yet) |
+| Android RoadDataManager wiring | NOT VALIDATED (contract only) |
+| Real driving GNSS traces | NOT VALIDATED |
+| Android/NDK latency | NOT VALIDATED |
+
+## REAL DRIVING VALIDATION: NOT VALIDATED
 
 ## Limitations
 
-- Field GNSS/OSM accuracy not claimed; synthetic accuracy is labeled **SYNTHETIC VALIDATION ONLY**.
-- Android/NDK latency not measured in this workspace.
-- Committed OSM extract is a small demo tile, not city-scale coverage.
+- Committed OSM extract is a small tile (~80 edges), not city-scale.
+- `osm_downloader.py` no longer hardcodes a city; old root-level scripts that called OSMnx download on import are gone.
+- Member 6 visual map SDK is out of scope here.

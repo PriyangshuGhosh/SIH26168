@@ -57,6 +57,18 @@ Runtime does not require internet or OSMnx.
 
 Road-network matching data (`.roadpack`) is not the same as map rendering tiles (MBTiles / style JSON).
 
+`MapMatchedPosition` extra fields (appended; original ABI fields unchanged):
+
+- `match_distance_m`
+- `map_available`
+- `match_valid`
+- `match_status` (`OK`, `NO_MAP_DATA`, `OUTSIDE_MAP`, `NO_CANDIDATES`, `REJECTED`, `INVALID_COORDINATES`)
+
+No-match keeps the Member 3 lat/lon. Never `0,0`.
+
+Region catalogs: `sih26168::member4::RegionCatalog` and Python `RoadDataManager`.
+Member 5 still uses `idr_select_map_for_location` / `MapCatalog` (compatible manifest).
+
 ## Member 6
 
 Member 6 should **not** call Member 4 directly. Consume map-matched lat/lon /

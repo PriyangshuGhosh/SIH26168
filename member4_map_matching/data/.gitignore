@@ -6,3 +6,5 @@ small_road_network.roadpack
 !small_road_network.graphml
 !README.md
 !.gitignore
+!maps/manifest.json
+!maps/regions/*.roadpack
