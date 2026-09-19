@@ -29,14 +29,24 @@ struct FrameAlignerConfig {
     double sample_rate_hz{100.0};
 
     int static_window_samples{50};
-    double static_accel_var_max{0.08};
-    double static_gyro_norm_max{0.04};
-    double static_accel_norm_tol{0.18};
+    // Tuned against the real IO-VNBD-derived IMU recording's near-stationary noise (P99), not just
+    // clean synthetic fixtures -- see the matching comment in
+    // member2_alignment/python/sih26168_alignment/types.py::FrameAlignerConfig for the measurement
+    // and rationale. The old, tighter values made real-hardware calibration lock statistically
+    // near-impossible.
+    double static_accel_var_max{0.15};
+    double static_gyro_norm_max{0.10};
+    double static_accel_norm_tol{0.35};
     double static_dir_align_rad{0.10};
     double min_static_duration_s{0.40};
 
     double gravity_ema_alpha{0.08};
     double gravity_max_tilt_jump_rad{0.25};
+    // See the matching comment in
+    // member2_alignment/python/sih26168_alignment/types.py::FrameAlignerConfig -- debounces
+    // FrameAligner::checkPhoneMoved so a single-sample road shock/pothole does not discard a good
+    // alignment the way a sustained real phone pick-up should.
+    double phone_moved_min_duration_s{0.15};
 
     double yaw_min_horiz_accel{0.45};
     double yaw_max_gyro_norm{0.18};

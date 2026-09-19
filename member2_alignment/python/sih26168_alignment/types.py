@@ -28,14 +28,35 @@ class FrameAlignerConfig:
     sample_rate_hz: float = 100.0
 
     static_window_samples: int = 50
-    static_accel_var_max: float = 0.08
-    static_gyro_norm_max: float = 0.04
-    static_accel_norm_tol: float = 0.18
+    # These three static-detection gates were tuned against clean/noise-free synthetic fixtures
+    # only. Measured against the project's own real IO-VNBD-derived accelerometer/gyroscope
+    # recording at near-zero vehicle speed (member1-ml/data/member1_imu_speed.npz, the only real
+    # sensor data in this repository), the old values (0.08 / 0.04 / 0.18) made a clean 50-sample
+    # static window statistically almost unreachable (P(window clean) ~= 2e-7 for the gyro gate
+    # alone), so FrameAligner could stay UNINITIALIZED indefinitely on real hardware noise and
+    # never reach FULLY_ALIGNED -- silently disabling both Member 1 AI-speed updates and Member 3's
+    # NHC (both gated on FULLY_ALIGNED). The values below are each set near the empirical
+    # 99th-percentile of that real near-stationary data, which comfortably passes real sensor noise
+    # while remaining far below genuine motion/shock events (pothole gyro spikes are 1-3 rad/s,
+    # cornering horizontal accel is 1-2 m/s^2), so the adversarial false-positive tests in
+    # member2_alignment/tests/python/test_adversarial_yaw.py are unaffected.
+    static_accel_var_max: float = 0.15
+    static_gyro_norm_max: float = 0.10
+    static_accel_norm_tol: float = 0.35
     static_dir_align_rad: float = 0.10
     min_static_duration_s: float = 0.40
 
     gravity_ema_alpha: float = 0.08
     gravity_max_tilt_jump_rad: float = 0.25
+    # Minimum WALL-CLOCK duration (not sample count -- rate-independent) the "phone moved" direction
+    # deviation (see FrameAligner._check_phone_moved) must persist before a full re-initialization is
+    # declared. A single-sample deviation with |a| still near gravity is the signature of a transient
+    # road shock/pothole, not a genuine (necessarily sustained) phone pick-up/reorientation -- verified
+    # forensically on real IO-VNBD 10 Hz driving data: every observed trigger before this fix was
+    # exactly one isolated sample with normal samples immediately before and after it (see
+    # docs/gru_velocity.md "M2 forensic fix"). Without this debounce, real single-sample shocks were
+    # destructively discarding a good alignment far more often than any synthetic test exercised.
+    phone_moved_min_duration_s: float = 0.15
 
     yaw_min_horiz_accel: float = 0.45
     yaw_max_gyro_norm: float = 0.18

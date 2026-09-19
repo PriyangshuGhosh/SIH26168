@@ -53,7 +53,7 @@ private:
     ValidateResult validate(double t, const Eigen::Vector3d& acc, const Eigen::Vector3d& gyro);
     bool isQuasiStatic() const;
     void updateGravity(const Eigen::Vector3d& acc, double t);
-    void checkPhoneMoved(const Eigen::Vector3d& acc);
+    void checkPhoneMoved(const Eigen::Vector3d& acc, double dt);
     void clearYaw();
     bool gnssQualityOk(double t) const;
     bool gnssSignReady(double t, double a_h_n) const;
@@ -114,6 +114,7 @@ private:
     double gravity_conf_{0.0};
     double yaw_conf_{0.0};
     double static_streak_s_{0.0};
+    double phone_moved_streak_s_{0.0};
 };
 
 Eigen::Matrix3d rotationGravityUpToVehicleZ(const Eigen::Vector3d& g_up_p);

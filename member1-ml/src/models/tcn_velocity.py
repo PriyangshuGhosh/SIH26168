@@ -76,18 +76,26 @@ class ResidualBlock(nn.Module):
 
 
 class VelocityNet(nn.Module):
-    """Causal CNN/TCN speed regressor, with an optional heteroscedastic uncertainty head.
+    """Causal CNN/TCN/GRU speed regressor, with an optional heteroscedastic uncertainty head.
 
     Build via :func:`build_model`. ``forward(x)`` always returns just the mean (m/s), for drop-in
     use by every point-estimate predictor and test already written against it; use
     :meth:`forward_full` to also get the predictive variance from an uncertainty-enabled model.
+
+    ``arch="gru"`` (added for the long-duration-blackout investigation, see
+    ``docs/gru_velocity.md``) replaces the fixed-receptive-field conv blocks with a single-layer
+    GRU. Trained exactly like "cnn"/"tcn" -- fixed-length windows, hidden state reset to zero at
+    the start of every window -- but because an RNN's hidden state is a first-class tensor (unlike
+    a conv stack's fixed window), it can *also* be run in a genuinely stateful, cross-call streaming
+    fashion at inference time via :meth:`step`, which a fixed causal-conv receptive field cannot do
+    regardless of window length. See :meth:`step` and ``src/inference/gru_streaming.py``.
     """
 
     def __init__(self, arch: str, channels: int, kernel_size: int, dilations: list[int], dropout: float,
                 uncertainty: bool = False, log_var_min: float = -6.0, log_var_max: float = 6.0,
-                derive_magnitude_channels: bool = False):
+                derive_magnitude_channels: bool = False, gru_layers: int = 1):
         super().__init__()
-        if arch not in ("cnn", "tcn"):
+        if arch not in ("cnn", "tcn", "gru"):
             raise ValueError(f"unknown arch {arch!r}")
         if uncertainty and log_var_min >= log_var_max:
             raise ValueError(f"log_var_min ({log_var_min}) must be < log_var_max ({log_var_max})")
@@ -101,11 +109,17 @@ class VelocityNet(nn.Module):
         # `features()`. This keeps every external caller (windowing, ONNX graph I/O, the production
         # Member 2 adapter) unchanged regardless of this flag.
         eff_channels = N_CHANNELS + 2 if self.derive_magnitude_channels else N_CHANNELS
-        blocks, in_ch = [], eff_channels
-        for d in dilations:
-            blocks.append(ResidualBlock(in_ch, channels, kernel_size, d, dropout))
-            in_ch = channels
-        self.blocks = nn.Sequential(*blocks)
+        if arch == "gru":
+            self.gru_layers = int(gru_layers)
+            self.gru_hidden = int(channels)
+            self.gru = nn.GRU(eff_channels, channels, num_layers=self.gru_layers, batch_first=True)
+            self.blocks = None
+        else:
+            blocks, in_ch = [], eff_channels
+            for d in dilations:
+                blocks.append(ResidualBlock(in_ch, channels, kernel_size, d, dropout))
+                in_ch = channels
+            self.blocks = nn.Sequential(*blocks)
         self.head = nn.Linear(channels, 1)
         if self.uncertainty:
             self.log_var_head = nn.Linear(channels, 1)
@@ -114,7 +128,9 @@ class VelocityNet(nn.Module):
             # input-dependent uncertainty signal is learned.
             nn.init.zeros_(self.log_var_head.weight)
             nn.init.zeros_(self.log_var_head.bias)
-        self.receptive_field = 1 + 2 * (kernel_size - 1) * sum(dilations)
+        # GRU has no fixed receptive field (that is the point -- see class docstring); -1 flags
+        # "unbounded/stateful" to any caller that logs this field, instead of a misleading number.
+        self.receptive_field = -1 if arch == "gru" else 1 + 2 * (kernel_size - 1) * sum(dilations)
         self.register_buffer("input_scale", torch.ones(eff_channels))
         self.register_buffer("target_mean", torch.zeros(()))
         self.register_buffer("target_std", torch.ones(()))
@@ -157,7 +173,11 @@ class VelocityNet(nn.Module):
             acc_mag = x[..., 0:3].norm(dim=-1, keepdim=True)
             gyr_mag = x[..., 3:6].norm(dim=-1, keepdim=True)
             x = torch.cat([x, acc_mag, gyr_mag], dim=-1)
-        return self.blocks((x / self.input_scale).transpose(1, 2))
+        x = x / self.input_scale
+        if self.arch == "gru":
+            out, _ = self.gru(x)  # [B, T, H]; zero initial hidden state, matches windowed training
+            return out.transpose(1, 2)  # [B, H, T], same layout convention as the conv path
+        return self.blocks(x.transpose(1, 2))
 
     def forward_full(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
         """``(mean_mps [B], log_var_mps2 [B] or None)``. ``log_var_mps2`` is ``None`` unless this
@@ -165,6 +185,9 @@ class VelocityNet(nn.Module):
         docstring), so ``exp()`` of it, or of its negation, is always finite and positive."""
         h = self.features(x)
         pooled = h.mean(dim=2) if self.arch == "cnn" else h[:, :, -1]
+        return self._head_from_pooled(pooled)
+
+    def _head_from_pooled(self, pooled: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
         mean = self.target_mean + self.target_std * self.head(pooled).squeeze(-1)
         if not self.uncertainty:
             return mean, None
@@ -174,6 +197,31 @@ class VelocityNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward_full(x)[0]
+
+    def step(self, x_t: torch.Tensor, h_prev: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor]:
+        """Single-timestep streaming update (``arch="gru"`` only): ``x_t`` is one new sample
+        ``[B, 1, 6]`` at the model's native rate, ``h_prev`` is the hidden state carried over from
+        the previous call (``[gru_layers, B, gru_hidden]``; zeros for a cold start / after a
+        Member 2 discontinuity, exactly like resetting ``ProductionWindowBuffer``).
+
+        This is what lets the deployed model track velocity through an extended,
+        near-zero-acceleration cruise that is far longer than any single training window: unlike
+        the fixed causal-conv receptive field, ``h_prev`` is not bounded to a fixed window length --
+        it is Member 1's entire, continuously-updated internal estimate of the vehicle's dynamic
+        state since the last discontinuity. Returns ``(mean_mps [B], log_var_mps2 [B] or None,
+        h_next [gru_layers, B, gru_hidden])``.
+        """
+        if self.arch != "gru":
+            raise ValueError("step() is only defined for arch='gru'")
+        if x_t.ndim != 3 or x_t.shape[1] != 1 or x_t.shape[-1] != N_CHANNELS:
+            raise ValueError(f"expected x_t of shape [B, 1, {N_CHANNELS}], got {tuple(x_t.shape)}")
+        if self.derive_magnitude_channels:
+            acc_mag = x_t[..., 0:3].norm(dim=-1, keepdim=True)
+            gyr_mag = x_t[..., 3:6].norm(dim=-1, keepdim=True)
+            x_t = torch.cat([x_t, acc_mag, gyr_mag], dim=-1)
+        out, h_next = self.gru(x_t / self.input_scale, h_prev)
+        mean, log_var = self._head_from_pooled(out[:, -1, :])
+        return mean, log_var, h_next
 
 
 def build_model(arch: str, model_cfg: dict[str, Any]) -> VelocityNet:
@@ -190,11 +238,15 @@ def build_model(arch: str, model_cfg: dict[str, Any]) -> VelocityNet:
         dilations = [1] * int(model_cfg["n_blocks"])
     elif base_arch == "tcn":
         dilations = [int(d) for d in model_cfg["dilations"]]
+    elif base_arch == "gru":
+        dilations = []
     else:
         raise ValueError(f"unknown arch {arch!r}")
-    return VelocityNet(base_arch, int(model_cfg["channels"]), int(model_cfg["kernel_size"]), dilations, float(model_cfg["dropout"]),
+    return VelocityNet(base_arch, int(model_cfg["channels"]), int(model_cfg.get("kernel_size", 1)), dilations,
+                       float(model_cfg.get("dropout", 0.0)),
                        bool(model_cfg.get("uncertainty", False)), float(model_cfg.get("log_var_min", -6.0)),
-                       float(model_cfg.get("log_var_max", 6.0)), bool(model_cfg.get("derive_magnitude_channels", False)))
+                       float(model_cfg.get("log_var_max", 6.0)), bool(model_cfg.get("derive_magnitude_channels", False)),
+                       int(model_cfg.get("gru_layers", 1)))
 
 
 def log_var_to_sigma(log_var_mps2: torch.Tensor) -> torch.Tensor:
