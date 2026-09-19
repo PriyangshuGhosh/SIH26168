@@ -7,108 +7,170 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.widget.Button
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import org.sih26168.idr.ui.IdrTheme
+import org.sih26168.idr.ui.NavigationScreen
 import java.io.File
 
-class MainActivity : AppCompatActivity(), LocationListener {
-    private val vm = NavigationViewModel()
-    private val handler = Handler(Looper.getMainLooper())
+class MainActivity : ComponentActivity(), LocationListener {
+    private val vm = NavigationViewModel(EngineBridge)
     private var imu: ImuService? = null
     private var locationManager: LocationManager? = null
-    private var mapSelected = false
-    private val poll = object : Runnable {
-        override fun run() {
-            EngineBridge.pollSnapshot()?.let { vm.applySnapshot(it) }
-            render()
-            handler.postDelayed(this, 100)
-        }
+    private var pollJob: Job? = null
+    private var roadsLoaded = false
+    private lateinit var mapsDir: File
+    private lateinit var roadMgr: LocalRoadDataManager
+    private var sessionLog: SessionLogger? = null
+    private var v2vStarted = false
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) startGnss()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        val mapsDir = File(filesDir, "maps")
+        mapsDir = File(filesDir, "maps")
         AssetProvisioner.copyAssetTree(this, "maps", mapsDir)
+        roadMgr = LocalRoadDataManager(mapsDir)
         val manifest = File(mapsDir, "manifest.json")
-        val onnx = File(filesDir, "speed_estimator.onnx")
-        if (!onnx.exists()) {
-            onnx.writeText("mock")
+        val onnxAsset = File(filesDir, "speed_estimator.onnx")
+        val onnxPath = if (onnxAsset.exists() && onnxAsset.length() > 16 && !onnxAsset.readText().trim().startsWith("mock")) {
+            onnxAsset.absolutePath
+        } else {
+            "mock"
         }
-        val mapArg = if (manifest.exists()) manifest.absolutePath else File(mapsDir, "synthetic_grid.roadpack").absolutePath
-        EngineBridge.nativeInit(mapArg, "mock")
+        val ok = EngineBridge.init(manifest.absolutePath, onnxPath)
+        vm.markEngine(ok, if (ok) null else EngineBridge.lastError().ifBlank { "init failed" })
+        vm.setStorage(roadMgr.storageInfo())
+        sessionLog = SessionLogger(File(filesDir, "logs/session.jsonl"))
 
-        findViewById<Button>(R.id.btnOutage).setOnClickListener {
-            vm.simulateGnssOutage = !vm.simulateGnssOutage
+        setContent {
+            val ui by vm.state.collectAsStateWithLifecycle()
+            IdrTheme {
+                NavigationScreen(
+                    state = ui,
+                    onToggleOutage = {
+                        vm.toggleOutage()
+                        val now = System.nanoTime() * 1e-9
+                        sessionLog?.outage(now, vm.state.value.simulateOutage)
+                    }
+                )
+            }
         }
-
-        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        imu = ImuService(sm) { sample ->
-            EngineBridge.nativeFeedImu(sample.timestampS, sample.ax, sample.ay, sample.az, sample.gx, sample.gy, sample.gz)
-        }
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
-        requestLocation()
-        imu?.start()
-        handler.post(poll)
     }
 
-    private fun requestLocation() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+    override fun onStart() {
+        super.onStart()
+        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+        imu = ImuService(sm) { sample ->
+            EngineBridge.feedImu(sample.timestampS, sample.ax, sample.ay, sample.az, sample.gx, sample.gy, sample.gz)
+            sessionLog?.imu(sample.timestampS, sample.ax, sample.ay, sample.az, sample.gx, sample.gy, sample.gz)
+        }
+        imu?.start()
+        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        requestPerms()
+        pollJob = lifecycleScope.launch(Dispatchers.Default) {
+            while (isActive) {
+                val snap = EngineBridge.poll()
+                val diag = EngineBridge.diagnostics()
+                if (snap != null && !roadsLoaded) {
+                    val pack = File(mapsDir, "synthetic_grid.roadpack")
+                    val osm = File(mapsDir, "regions").listFiles()?.firstOrNull()
+                    val chosen = when {
+                        snap.regionId.contains("synthetic") && pack.isFile -> pack
+                        osm != null -> osm
+                        pack.isFile -> pack
+                        else -> null
+                    }
+                    chosen?.readText()?.let { RoadpackParser.parse(it)?.let { g -> vm.setRoads(g) } }
+                    roadsLoaded = true
+                    if (!v2vStarted && EngineBridge.nativeAvailable) {
+                        runCatching { V2vBridge.nativeStartSimulated(snap.lat, snap.lon) }
+                        v2vStarted = true
+                    }
+                }
+                val v2v = if (v2vStarted && snap != null) {
+                    runCatching {
+                        V2vBridge.snapshot(snap.timestamp, snap, !vm.state.value.simulateOutage && snap.isDeadReckoning.not())
+                    }.getOrNull()
+                } else null
+                val approaching = vm.state.value.rawGps?.let {
+                    roadMgr.selectForLocation(it.lat, it.lon)
+                    roadMgr.approachingBoundary(it.lat, it.lon, 80.0)
+                } ?: false
+                vm.onPoll(snap, diag, v2v, approaching)
+                delay(100)
+            }
+        }
+    }
+
+    override fun onStop() {
+        pollJob?.cancel()
+        imu?.stop()
+        locationManager?.removeUpdates(this)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        runCatching { V2vBridge.nativeStop() }
+        EngineBridge.shutdown()
+        super.onDestroy()
+    }
+
+    private fun requestPerms() {
+        val need = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        if (need.any { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
+            permissionLauncher.launch(need)
+        } else {
+            startGnss()
+        }
+    }
+
+    private fun startGnss() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, this)
     }
 
     override fun onLocationChanged(location: Location) {
-        if (!mapSelected) {
-            mapSelected = EngineBridge.nativeSelectMap(location.latitude, location.longitude)
-        }
-        if (vm.simulateGnssOutage) return
-        val speed = if (location.hasSpeed()) location.speed.toDouble() else 0.0
         val t = location.elapsedRealtimeNanos * 1.0e-9
+        val speed = if (location.hasSpeed()) location.speed.toDouble() else Double.NaN
+        val feed = !vm.state.value.simulateOutage && !vm.state.value.replayActive
         val hdop = if (location.hasAccuracy()) (location.accuracy / 5.0).toDouble() else 1.0
-        EngineBridge.nativeFeedGnss(t, location.latitude, location.longitude, location.altitude, speed, hdop, 8)
-    }
-
-    private fun render() {
-        val s = vm.lastSnapshot
-        findViewById<TextView>(R.id.txtSpeed).text = vm.speedLabel()
-        findViewById<TextView>(R.id.txtMode).text =
-            if (s?.isDeadReckoning == true) "DEAD RECKONING" else "GNSS-AIDED"
-        findViewById<TextView>(R.id.txtMap).text =
-            if (s?.mapStatus?.contains("NOT AVAILABLE") == true) {
-                "MAP DATA NOT AVAILABLE"
-            } else vm.mapMessage
-        findViewById<TextView>(R.id.txtPos).text =
-            if (s == null) "—" else String.format("%.6f, %.6f  hdg %.0f°", s.lat, s.lon, s.headingDeg)
-        val diag = findViewById<TextView>(R.id.txtDiag)
-        if (BuildConfig.DEBUG) {
-            diag.visibility = android.view.View.VISIBLE
-            val d = DoubleArray(12)
-            EngineBridge.nativeDiagnostics(d)
-            diag.text = buildString {
-                append("diag GNSS ").append("%.2f".format(d[0])).append(" m/s\n")
-                append("AI ").append("%.2f".format(d[1])).append("  EKF ").append("%.2f".format(d[2])).append("\n")
-                append("display ").append("%.2f".format(d[3])).append(" valid=").append(s?.speedValid).append("\n")
-                append("reject ").append(s?.speedRejectReason ?: "").append("\n")
-                append("map ").append(s?.mapStatus ?: "").append(" region ").append(s?.regionId ?: "").append("\n")
-                append("IMU Hz ").append("%.1f".format(d[8]))
-            }
-        } else {
-            diag.visibility = android.view.View.GONE
+        if (feed) {
+            EngineBridge.selectMap(location.latitude, location.longitude)
+            EngineBridge.feedGnss(
+                t, location.latitude, location.longitude, location.altitude,
+                if (speed.isFinite()) speed else 0.0, hdop, 8
+            )
+            sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, if (speed.isFinite()) speed else 0.0, hdop, 8)
         }
-    }
-
-    override fun onDestroy() {
-        handler.removeCallbacks(poll)
-        imu?.stop()
-        EngineBridge.nativeShutdown()
-        super.onDestroy()
+        vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(),
+            if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed)
+        roadMgr.selectForLocation(location.latitude, location.longitude)
+        vm.setStorage(roadMgr.storageInfo())
+        if (!roadsLoaded) {
+            val cover = roadMgr.findCovering(location.latitude, location.longitude)
+            cover?.let { File(it.roadpackPath).takeIf { f -> f.isFile }?.readText() }
+                ?.let { RoadpackParser.parse(it) }
+                ?.let { vm.setRoads(it); roadsLoaded = true }
+        }
     }
 }
