@@ -129,6 +129,15 @@ private fun EngineeringBlock(state: NavUiState) {
             "finalDriftMeters=${"%.2f".format(it.finalDriftMeters)} (est-at-restore vs restored GPS; not last-GPS vs new-GPS)",
             fontSize = 12.sp
         )
+        Text(
+            "Outage \${"%.1f".format(it.durationS)} s\${if (it.simulated) " (SIMULATED feed cut)" else ""}",
+            fontSize = 11.sp
+        )
+        it.lastGpsBeforeOutage?.let { g ->
+            Text("Last valid GNSS \${"%.6f".format(g.lat)}, \${"%.6f".format(g.lon)}", fontSize = 11.sp)
+        }
+        Text("Est at restore \${"%.6f".format(it.estimatedAtRestore.lat)}, \${"%.6f".format(it.estimatedAtRestore.lon)}", fontSize = 11.sp)
+        Text("Restored GNSS  \${"%.6f".format(it.restoredGps.lat)}, \${"%.6f".format(it.restoredGps.lon)}", fontSize = 11.sp)
         it.gpsDisplacementDuringOutageMeters?.let { gap ->
             Text("GPS displacement during outage (not drift): ${"%.2f".format(gap)} m", fontSize = 11.sp)
         }

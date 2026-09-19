@@ -274,7 +274,7 @@ bool Engine::feedGnss(const GnssSample& s) {
                 speed_reject_.clear();
             } else {
                 speed_valid_ = 0;
-                speed_reject_ = "gnss_speed_rejected";
+                speed_reject_ = std::isfinite(s.speed) ? "gnss_speed_rejected" : "gnss_speed_unavailable";
             }
         }
     }
@@ -394,6 +394,19 @@ void Engine::workerLoop() {
     }
 }
 
+sih26168::member3::GnssMeasurement toGnssMeasurement(const GnssSample& s) {
+    sih26168::member3::GnssMeasurement g;
+    g.timestamp = s.timestamp;
+    g.latitude = s.lat;
+    g.longitude = s.lon;
+    g.altitude = s.alt;
+    g.speed_mps = s.speed;
+    g.speed_valid = SpeedValidityFilter::finiteNonNegative(s.speed);
+    g.hdop = s.hdop;
+    g.num_sats = s.num_sats;
+    return g;
+}
+
 void Engine::handleGnss(const GnssSample& s) {
     sih26168::member2::OptionalGnssAid aid;
     aid.timestamp = s.timestamp;
@@ -404,15 +417,7 @@ void Engine::handleGnss(const GnssSample& s) {
 
     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
     if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
-        sih26168::member3::GnssMeasurement g;
-        g.timestamp = s.timestamp;
-        g.latitude = s.lat;
-        g.longitude = s.lon;
-        g.altitude = s.alt;
-        g.speed_mps = s.speed;
-        g.hdop = s.hdop;
-        g.num_sats = s.num_sats;
-        fusion_.updateGnss(g);
+        fusion_.updateGnss(toGnssMeasurement(s));
     }
     publishLocked();
 }

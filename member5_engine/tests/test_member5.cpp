@@ -307,6 +307,59 @@ int test_onnx_path() {
     return 0;
 }
 
+/* Regression: a GNSS fix without speed (Android hasSpeed()==false -> NaN) must not reach the EKF
+   as an artificial 0 m/s measurement. A real 0.0 m/s must still be a valid measurement. */
+int test_gnss_without_speed_is_not_zero_measurement() {
+    using sih26168::member3::EKFFusionEngine;
+    using sih26168::member3::NavigationMode;
+    using sih26168::member5::GnssSample;
+    using sih26168::member5::toGnssMeasurement;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double lat = 12.9716;
+    const double lon = 77.5946;
+
+    CHECK(!toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, nan, 1.0, 10}).speed_valid);
+    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 0.0, 1.0, 10}).speed_valid);
+    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}).speed_valid);
+
+    /* Establish ~1.3 m/s with real speed fixes, then apply a same-position fix at t=0.3 that either
+       has no speed (NaN) or a real 0.0 m/s; only the latter may pull the velocity down. */
+    auto speed_after = [&](double third_fix_speed, bool position_only, bool* accepted) {
+        EKFFusionEngine ekf;
+        sih26168::member2::AlignedIMUFrame f{};
+        f.az_v = 9.80665;
+        f.status = sih26168::member2::CalibrationStatus::FULLY_ALIGNED;
+        ekf.updateGnss(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}));
+        for (int i = 1; i <= 2; ++i) {
+            f.timestamp = 0.1 * i;
+            ekf.predict(f, NavigationMode::GNSS_AIDED);
+            ekf.updateGnss(toGnssMeasurement(GnssSample{0.1 * i, lat, lon, 900.0, 1.5, 1.0, 10}));
+        }
+        f.timestamp = 0.3;
+        ekf.predict(f, NavigationMode::GNSS_AIDED);
+        const double before = ekf.state().v_x;
+        auto m = toGnssMeasurement(GnssSample{0.3, lat, lon, 900.0, third_fix_speed, 1.0, 10});
+        if (position_only) {
+            m.speed_valid = false; /* Member 3's explicit position-only convention */
+        }
+        ekf.updateGnss(m);
+        if (accepted != nullptr) {
+            *accepted = ekf.state().last_gnss_accepted;
+        }
+        return std::make_pair(before, ekf.state().v_x);
+    };
+
+    bool none_accepted = false;
+    const auto none = speed_after(nan, false, &none_accepted);
+    const auto position_only = speed_after(1.5, true, nullptr);
+    const auto zero = speed_after(0.0, false, nullptr);
+    CHECK(none.first > 0.5);
+    CHECK(none_accepted);
+    CHECK(std::abs(none.second - position_only.second) < 1e-12);
+    CHECK(zero.second < none.second - 0.2);
+    return 0;
+}
+
 int test_speed_validity_matrix() {
     using sih26168::member5::SpeedValidityFilter;
     using sih26168::member5::SpeedRejectReason;
@@ -506,6 +559,9 @@ int main() {
         return 1;
     }
     if (test_onnx_path() != 0) {
+        return 1;
+    }
+    if (test_gnss_without_speed_is_not_zero_measurement() != 0) {
         return 1;
     }
     if (test_speed_validity_matrix() != 0) {
