@@ -12,6 +12,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -33,6 +34,20 @@ struct GnssSample {
     double hdop;
     int num_sats;
 };
+
+inline sih26168::member3::GnssMeasurement toGnssMeasurement(
+    const GnssSample& sample) {
+    sih26168::member3::GnssMeasurement measurement{};
+    measurement.timestamp = sample.timestamp;
+    measurement.latitude = sample.lat;
+    measurement.longitude = sample.lon;
+    measurement.altitude = sample.alt;
+    measurement.speed_mps = sample.speed;
+    measurement.hdop = sample.hdop;
+    measurement.num_sats = sample.num_sats;
+    measurement.speed_valid = std::isfinite(sample.speed);
+    return measurement;
+}
 
 class Engine {
 public:
