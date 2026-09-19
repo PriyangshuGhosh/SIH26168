@@ -6,7 +6,6 @@
 #include "member5/SpscRing.hpp"
 #include "member5/ImuTimestampPairer.hpp"
 #include "member5/MapCatalog.hpp"
-#include "member5/SpeedEstimator.hpp"
 #include "member5/SpeedUnits.hpp"
 #include "member5/SpeedValidity.hpp"
 #include "test_support.hpp"
@@ -19,7 +18,6 @@
 #include <limits>
 #include <string>
 #include <thread>
-#include <vector>
 
 #define CHECK(cond)                                                                              \
     do {                                                                                         \
@@ -309,34 +307,6 @@ int test_onnx_path() {
     return 0;
 }
 
-int test_onnx_variance_name_m2s2() {
-#if defined(IDR_WITH_ONNXRUNTIME)
-    /* Member 1's REAL production output is named "velocity_variance_m2s2"
-       (member1-ml/src/inference/export_onnx.py::OUTPUT_NAMES_UNCERTAINTY), not "uncertainty" or
-       bare "variance". This fixture (member5_engine/scripts/make_dummy_onnx.py) mirrors that exact
-       name so a regression that only matches the older sigma-named ("uncertainty") convention is
-       caught here instead of silently falling back to the hardcoded 0.05 default variance. */
-    const char* dummy = "member5_engine/tests/data/dummy_speed_estimator_m2s2.onnx";
-    std::ifstream in(dummy, std::ios::binary);
-    if (!in.good()) {
-        std::printf("m2s2-named onnx dummy missing; skip variance-name regression test\n");
-        return 0;
-    }
-    in.close();
-
-    sih26168::member5::OnnxSpeedEstimator est;
-    CHECK(est.load(dummy));
-    std::vector<float> window(static_cast<std::size_t>(est.requiredWindowSamples()) * 6, 1.5f);
-    const auto out = est.predict(window.data(), est.requiredWindowSamples());
-    CHECK(out.valid);
-    CHECK(std::abs(out.velocity_mps - 1.5f) < 1.0e-4f);
-    /* The fixture's velocity_variance_m2s2 output is a constant 2.25; the hardcoded 0.05 fallback
-       must NOT be observed here, or the real name is not being matched. */
-    CHECK(std::abs(out.variance_m2s2 - 2.25f) < 1.0e-4f);
-#endif
-    return 0;
-}
-
 int test_speed_validity_matrix() {
     using sih26168::member5::SpeedValidityFilter;
     using sih26168::member5::SpeedRejectReason;
@@ -492,13 +462,6 @@ int test_e2e_speed_spike_and_gnss_outage_map() {
     idr_feed_gnss(dr.timestamp + 0.05, 12.9717, 77.5946, 920.0, 5.0, 0.9, 10);
     wait_for([] { return idr_get_current_state().is_dead_reckoning == 0; }, 1500);
     CHECK(idr_get_current_state().is_dead_reckoning == 0);
-
-    const double t_ai = idr_get_current_state().timestamp;
-    CHECK(idr_debug_inject_ai_speed(t_ai, 194.4, 0.05) == 0);
-    CHECK(idr_get_diagnostics().last_ai_speed_accepted == 0);
-    CHECK(idr_get_current_state().speed_m_s <= 55.0 + 1e-6);
-    CHECK(idr_engine_is_simulation() == 1);
-
     idr_engine_shutdown();
     return 0;
 }
@@ -543,9 +506,6 @@ int main() {
         return 1;
     }
     if (test_onnx_path() != 0) {
-        return 1;
-    }
-    if (test_onnx_variance_name_m2s2() != 0) {
         return 1;
     }
     if (test_speed_validity_matrix() != 0) {

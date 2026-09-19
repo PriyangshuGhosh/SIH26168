@@ -175,27 +175,3 @@ IDRDiagnostics idr_get_diagnostics(void) {
     }
     return e->diagnostics();
 }
-
-void idr_engine_set_simulation(int enabled) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
-        return;
-    }
-    e->setSimulation(enabled != 0);
-}
-
-int idr_engine_is_simulation(void) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
-        return 0;
-    }
-    return e->isSimulation() ? 1 : 0;
-}
-
-int idr_debug_inject_ai_speed(double timestamp, double velocity_mps, double variance_m2s2) {
-    sih26168::member5::Engine* e = g_engine.load(std::memory_order_acquire);
-    if (e == nullptr) {
-        return 0;
-    }
-    return e->debugInjectAiSpeed(timestamp, velocity_mps, variance_m2s2);
-}
