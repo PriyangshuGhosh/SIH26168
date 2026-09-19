@@ -65,8 +65,9 @@ class NavigationViewModel(
         refreshMode()
     }
 
-    fun onRawGps(t: Double, lat: Double, lon: Double, speedMps: Double, hasSpeed: Boolean, accuracyM: Double, feed: Boolean) {
-        val rec = outage.noteRawGps(t, lat, lon, feed)
+    fun onRawGps(t: Double, lat: Double, lon: Double, speedMps: Double, hasSpeed: Boolean, accuracyM: Double, feed: Boolean,
+                 estimateAtRestore: GeoPoint? = null) {
+        val rec = outage.noteRawGps(t, lat, lon, feed, estimateAtRestore)
         gpsTrail.addLast(GeoPoint(t, lat, lon))
         while (gpsTrail.size > 400) gpsTrail.removeFirst()
         _state.update {
