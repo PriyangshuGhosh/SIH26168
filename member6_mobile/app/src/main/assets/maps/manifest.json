@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "coordinate_reference": "EPSG:4326",
+  "regions": [
+    {
+      "id": "synthetic_grid_demo",
+      "roadpack": "synthetic_grid.roadpack",
+      "min_lat": 12.97150,
+      "max_lat": 12.97380,
+      "min_lon": 77.59450,
+      "max_lon": 77.59690,
+      "road_count": 48,
+      "version": "1",
+      "coordinate_reference": "EPSG:4326",
+      "built_at": "synthetic"
+    }
+  ]
+}
