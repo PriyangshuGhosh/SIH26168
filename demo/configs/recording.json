@@ -1,0 +1,22 @@
+{
+  "label": "SIMULATION",
+  "v2x_radio": "SIMULATED",
+  "recording": {
+    "seed": 7,
+    "n_remotes": 3,
+    "dt_s": 0.1,
+    "gnss_outage_s": 10.0,
+      "bad_offset_east_m": 400.0
+    "duration_s": 40.0,
+    "timeline": [
+      {"t": 0, "caption": "We are navigating normally."},
+      {"t": 10, "caption": "GNSS disappears."},
+      {"t": 12, "caption": "Dead reckoning starts drifting."},
+      {"t": 15, "caption": "Nearby vehicles continue broadcasting cooperative state."},
+      {"t": 20, "caption": "A bad observation appears."},
+      {"t": 21, "caption": "The NIS gate detects and rejects it."},
+      {"t": 25, "caption": "The system continues safely."},
+      {"t": 28, "caption": "Quantitative error comparison is shown."}
+    ]
+  }
+}

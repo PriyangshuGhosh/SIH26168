@@ -48,6 +48,16 @@ The enhanced path is auxiliary: if camera quality is poor or the vision module f
 
 The vision/depth track is integrated experimentally across Members 3, 5, and 6 after the baseline pipeline is stable.
 
+## Mode-A V2X demo (simulation visualization)
+
+Standalone library: [`sih26168_v2x/`](sih26168_v2x/README.md). Desktop digital twin (not a radio, not Members 1–6):
+
+```bash
+PYTHONPATH=sih26168_v2x/python:demo python3 -m sih26168_v2x_demo --demo
+```
+
+See [`demo/README.md`](demo/README.md). **V2X RADIO: SIMULATED.**
+
 ## Member 2 (frame alignment)
 
 Implemented under [`member2_alignment/`](member2_alignment/README.md). Documentation:
@@ -69,6 +79,19 @@ Binding notes: [`docs/member5/INTEGRATION.md`](docs/member5/INTEGRATION.md).
 
 Implemented under [`member6_mobile/`](member6_mobile/README.md). Documentation:
 [`docs/member6/`](docs/member6/README.md).
+
+## V2X cooperative localization (MODE A simulation)
+
+Standalone library [`sih26168_v2x/`](sih26168_v2x/README.md). **Software simulation only** — not C-V2X/OBU/Android radio. Optional CMake flag `SIH26168_BUILD_V2X`.
+
+```bash
+cmake -S sih26168_v2x -B build-v2x -DCMAKE_BUILD_TYPE=Release
+cmake --build build-v2x -j
+ctest --test-dir build-v2x --output-on-failure
+PYTHONPATH=sih26168_v2x/python python3 -m pytest sih26168_v2x/tests/python -q
+```
+
+Do **not** treat this as real V2X until hardware exists and is tested.
 
 
 ```bash
