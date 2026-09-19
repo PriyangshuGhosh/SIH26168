@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "coordinate_reference": "EPSG:4326",
+  "notes": "Bundled offline catalog. Region ids are WGS84 bounds, not city names.",
   "regions": [
     {
       "id": "synthetic_grid_demo",
@@ -10,9 +11,25 @@
       "min_lon": 77.59450,
       "max_lon": 77.59690,
       "road_count": 48,
-      "version": "1",
-      "coordinate_reference": "EPSG:4326",
-      "built_at": "synthetic"
+      "synthetic": true,
+      "source": "synthetic",
+      "license": "test",
+      "version": "1"
+    },
+    {
+      "id": "r_12p96830_77p59103_12p97503_77p59815",
+      "roadpack": "regions/r_12p96830_77p59103_12p97503_77p59815.roadpack",
+      "min_lat": 12.9683025,
+      "max_lat": 12.9750314,
+      "min_lon": 77.5910265,
+      "max_lon": 77.5981489,
+      "road_count": 80,
+      "node_count": 45,
+      "synthetic": false,
+      "source": "OpenStreetMap",
+      "license": "ODbL-1.0",
+      "attribution": "© OpenStreetMap contributors",
+      "version": "1"
     }
   ]
 }
