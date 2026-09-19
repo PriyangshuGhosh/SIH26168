@@ -464,8 +464,8 @@ void Engine::handleImu(const ImuSample& s) {
     noteImuRate(s.timestamp);
 
     const float ch[kChannels] = {
-        static_cast<float>(aligned.ax_v / 9.80665f), static_cast<float>(aligned.ay_v / 9.80665f),
-        static_cast<float>(aligned.az_v / 9.80665f), static_cast<float>(aligned.gx_v),
+        static_cast<float>(aligned.ax_v), static_cast<float>(aligned.ay_v),
+        static_cast<float>(aligned.az_v), static_cast<float>(aligned.gx_v),
         static_cast<float>(aligned.gy_v), static_cast<float>(aligned.gz_v)};
 
     ++stride_count_;
