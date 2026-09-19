@@ -89,6 +89,19 @@ models:
     log_var_min: -6.0
     log_var_max: 6.0
     derive_magnitude_channels: true
+  # Single-layer GRU (see docs/gru_velocity.md): windowed training like cnn/tcn (hidden state reset
+  # to zero at each window start), but exportable for genuinely stateful streaming inference
+  # (VelocityNet.step) -- investigated to address long-GNSS-blackout drift caused by cnn/cnn_mag/tcn
+  # predicting ~0 m/s whenever the causal window has near-zero net acceleration (steady-speed
+  # cruise), since none of them retain any state across separate inference calls.
+  gru:
+    channels: 64
+    gru_layers: 2
+    dropout: 0.0
+    uncertainty: true
+    log_var_min: -6.0
+    log_var_max: 6.0
+    derive_magnitude_channels: true
 
 training:
   archs: [cnn, tcn]

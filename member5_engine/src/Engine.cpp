@@ -214,6 +214,28 @@ bool Engine::loadSpeed(const char* onnx_model_path) {
         last_error_ = "onnx_model_path is required in production (pass \"mock\" only for tests)";
         return false;
     }
+    /* Opt-in stateful streaming candidate (member1-ml/docs/gru_velocity.md), same "explicit prefix
+       marker" convention as "mock:" above. Unmarked paths keep using the existing stateless
+       OnnxSpeedEstimator unchanged -- this branch does not alter default behaviour at all. */
+    if (startsWith(onnx_model_path, "gru:")) {
+        const std::string path = onnx_model_path + 4;
+        if (!fileExists(path.c_str())) {
+            last_error_ = std::string("GRU streaming ONNX model not found: ") + path;
+            return false;
+        }
+        auto gru = std::make_unique<GruStreamingSpeedEstimator>();
+        if (!gru->load(path)) {
+            last_error_ = gru->lastError()[0] != '\0'
+                              ? std::string(gru->lastError())
+                              : (std::string("failed to load GRU streaming ONNX model: ") + path);
+            return false;
+        }
+        speed_ = std::move(gru);
+        speed_->reset(); /* explicit startup reset; also true by construction (see class docstring) */
+        backend_name_ = speed_->backendName();
+        model_T_ = std::clamp(speed_->requiredWindowSamples(), 8, kMaxT);
+        return true;
+    }
     if (!fileExists(onnx_model_path)) {
         last_error_ = std::string("ONNX model not found: ") + onnx_model_path;
         return false;
@@ -503,6 +525,13 @@ void Engine::handleGnss(const GnssSample& s) {
 void Engine::handleImu(const ImuSample& s) {
     const auto aligned = aligner_.process(s.timestamp, s.ax, s.ay, s.az, s.gx, s.gy, s.gz);
     if (aligned.status == sih26168::member2::CalibrationStatus::INVALID) {
+        /* The one discontinuity condition Engine already special-cases: this raw sample is
+           discarded entirely (no predict()/EKF update below), so a stateful speed estimator's
+           hidden state is cleared here too rather than carried across the gap -- a no-op for the
+           stateless MockSpeedEstimator/OnnxSpeedEstimator (default reset()). */
+        if (speed_) {
+            speed_->reset();
+        }
         return;
     }
 

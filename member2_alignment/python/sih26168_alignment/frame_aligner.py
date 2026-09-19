@@ -76,6 +76,7 @@ class FrameAligner:
         self._temporal_conf = 0.0
 
         self._static_streak_s = 0.0
+        self._phone_moved_streak_s = 0.0
         self._last_good_frame: AlignedIMUFrame | None = None
 
     def status(self) -> CalibrationStatus:
@@ -152,7 +153,7 @@ class FrameAligner:
             self._update_gravity(acc, t)
         else:
             self._static_streak_s = 0.0
-            self._check_phone_moved(acc, t)
+            self._check_phone_moved(acc, t, dt)
 
         if self._g_initialized:
             self._update_yaw(t, acc, gyro, dt if dt > 0 else self.cfg.nominal_dt())
@@ -243,29 +244,49 @@ class FrameAligner:
         ):
             self._status = CalibrationStatus.ROLL_PITCH_VALID
 
-    def _check_phone_moved(self, acc: np.ndarray, t: float) -> None:
+    def _check_phone_moved(self, acc: np.ndarray, t: float, dt: float) -> None:
         if not self._g_initialized or self._g_up_p is None:
             return
         # If the specific-force direction drifts far from estimated up while
         # gyro is large, the phone is likely being handled — not vehicle motion.
         an = vector_norm(acc)
         if an < 1.0:
+            self._phone_moved_streak_s = 0.0
             return
         up_meas = acc / an
         dot = float(np.clip(np.dot(self._g_up_p, up_meas), -1.0, 1.0))
         ang = float(np.arccos(dot))
-        if ang > 0.6 and self._status in (
-            CalibrationStatus.FULLY_ALIGNED,
-            CalibrationStatus.YAW_UNCERTAIN,
-            CalibrationStatus.ROLL_PITCH_VALID,
-        ):
-            # Could be hard acceleration; only flag if also far from |a|≈g and not a shock-only spike handled elsewhere.
-            if abs(an - self.cfg.gravity_mps2) < 2.5:
-                self._status = CalibrationStatus.REINITIALIZING
-                self._clear_yaw()
-                self._g_initialized = False
-                self._g_up_p = None
-                self._gravity_conf = 0.0
+        condition = (
+            ang > 0.6
+            and self._status
+            in (
+                CalibrationStatus.FULLY_ALIGNED,
+                CalibrationStatus.YAW_UNCERTAIN,
+                CalibrationStatus.ROLL_PITCH_VALID,
+            )
+            # Could be hard acceleration; only flag if also far from |a|~g and not a shock-only spike.
+            and abs(an - self.cfg.gravity_mps2) < 2.5
+        )
+        if not condition:
+            self._phone_moved_streak_s = 0.0
+            return
+        # A genuine phone pick-up/reorientation is sustained (at least hundreds of ms); a single
+        # sample this far off "up" with |a| still near g is the signature of a transient road
+        # shock/pothole (confirmed on real IO-VNBD data: every observed trigger was exactly one
+        # isolated sample, normal samples immediately before and after -- see docs/gru_velocity.md
+        # "M2 forensic fix"), not sustained handling. Debouncing over a minimum WALL-CLOCK duration
+        # (not a fixed sample count) makes this correctly rate-independent: at 100 Hz it takes ~15
+        # consecutive samples, at 10 Hz ~2, either way requiring the same real elapsed evidence
+        # before discarding the existing alignment.
+        self._phone_moved_streak_s += dt if dt > 0 else self.cfg.nominal_dt()
+        if self._phone_moved_streak_s < self.cfg.phone_moved_min_duration_s:
+            return
+        self._phone_moved_streak_s = 0.0
+        self._status = CalibrationStatus.REINITIALIZING
+        self._clear_yaw()
+        self._g_initialized = False
+        self._g_up_p = None
+        self._gravity_conf = 0.0
 
     def _clear_yaw(self) -> None:
         self._yaw = None

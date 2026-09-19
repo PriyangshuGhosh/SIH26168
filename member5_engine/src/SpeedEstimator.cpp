@@ -1,6 +1,7 @@
 #include "member5/SpeedEstimator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -261,6 +262,164 @@ SpeedEstimate OnnxSpeedEstimator::predict(const float* samples_t6, int n_samples
         } else {
             out.variance_m2s2 = 0.05f;
         }
+        out.valid = true;
+    } catch (...) {
+        out.valid = false;
+    }
+    return out;
+}
+
+struct GruStreamingSpeedEstimator::Impl {
+    Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "idr_speed_gru"};
+    Ort::SessionOptions opts;
+    std::unique_ptr<Ort::Session> session;
+    std::string x_name{"imu_sample_10hz"};
+    std::string h_name{"h_in"};
+    std::vector<std::string> output_names;
+    std::vector<int64_t> h_shape{1, 1, 1}; /* [layers, batch=1, hidden]; read from the graph at load */
+    std::vector<float> h_state;            /* persisted across predict() calls until reset() */
+    std::string last_error;
+};
+
+GruStreamingSpeedEstimator::GruStreamingSpeedEstimator() : impl_(new Impl()) {
+    impl_->opts.SetIntraOpNumThreads(1);
+    impl_->opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+}
+
+GruStreamingSpeedEstimator::~GruStreamingSpeedEstimator() { delete impl_; }
+
+int GruStreamingSpeedEstimator::requiredWindowSamples() const {
+    /* Only the newest sample of whatever window Engine hands us is used (see class docstring), but
+       this must stay >= Engine's model_T_ lower clamp (8); 10 also matches the production
+       100 Hz -> 10 Hz decimation stride used everywhere else in this codebase. */
+    return 10;
+}
+
+const char* GruStreamingSpeedEstimator::lastError() const {
+    return impl_ != nullptr ? impl_->last_error.c_str() : "";
+}
+
+void GruStreamingSpeedEstimator::reset() {
+    if (impl_ != nullptr) {
+        std::fill(impl_->h_state.begin(), impl_->h_state.end(), 0.0f);
+    }
+}
+
+bool GruStreamingSpeedEstimator::load(const std::string& model_path) {
+    impl_->last_error.clear();
+    impl_->session.reset();
+    if (model_path.empty()) {
+        impl_->last_error = "empty ONNX path";
+        return false;
+    }
+    try {
+#ifdef _WIN32
+        const std::wstring wpath(model_path.begin(), model_path.end());
+        impl_->session = std::make_unique<Ort::Session>(impl_->env, wpath.c_str(), impl_->opts);
+#else
+        impl_->session = std::make_unique<Ort::Session>(impl_->env, model_path.c_str(), impl_->opts);
+#endif
+        if (impl_->session->GetInputCount() != 2) {
+            impl_->last_error = "GRU streaming ONNX must have exactly 2 inputs (sample, h_in)";
+            impl_->session.reset();
+            return false;
+        }
+        Ort::AllocatorWithDefaultOptions alloc;
+        {
+            auto n0 = impl_->session->GetInputNameAllocated(0, alloc);
+            impl_->x_name = n0.get();
+            auto n1 = impl_->session->GetInputNameAllocated(1, alloc);
+            impl_->h_name = n1.get();
+        }
+        auto h_type_info = impl_->session->GetInputTypeInfo(1);
+        auto h_dims = h_type_info.GetTensorTypeAndShapeInfo().GetShape();
+        if (h_dims.size() != 3) {
+            impl_->last_error = "GRU streaming ONNX h_in must be rank 3 [layers, batch, hidden]";
+            impl_->session.reset();
+            return false;
+        }
+        const int64_t layers = h_dims[0] > 0 ? h_dims[0] : 1;
+        const int64_t hidden = h_dims[2] > 0 ? h_dims[2] : 1;
+        impl_->h_shape = {layers, 1, hidden};
+        impl_->h_state.assign(static_cast<std::size_t>(layers * hidden), 0.0f);
+
+        impl_->output_names.clear();
+        const std::size_t nout = impl_->session->GetOutputCount();
+        if (nout < 2) {
+            impl_->last_error = "GRU streaming ONNX must have at least 2 outputs (velocity, h_out)";
+            impl_->session.reset();
+            return false;
+        }
+        for (std::size_t i = 0; i < nout; ++i) {
+            auto on = impl_->session->GetOutputNameAllocated(i, alloc);
+            impl_->output_names.emplace_back(on.get());
+        }
+        return true;
+    } catch (const Ort::Exception& ex) {
+        impl_->last_error = std::string("GRU streaming ONNX load failed: ") + ex.what();
+        impl_->session.reset();
+        return false;
+    } catch (...) {
+        impl_->last_error = "GRU streaming ONNX load failed (unknown exception)";
+        impl_->session.reset();
+        return false;
+    }
+}
+
+SpeedEstimate GruStreamingSpeedEstimator::predict(const float* samples_t6, int n_samples) {
+    SpeedEstimate out;
+    if (impl_->session == nullptr || samples_t6 == nullptr || n_samples <= 0) {
+        return out;
+    }
+    /* Causal "last real sample of the window" decimation -- see class docstring. */
+    const float* row = samples_t6 + (n_samples - 1) * 6;
+    std::array<float, 6> x_buf{row[0], row[1], row[2], row[3], row[4], row[5]};
+    std::array<int64_t, 3> x_shape{1, 1, 6};
+
+    Ort::MemoryInfo mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    Ort::Value x_tensor =
+        Ort::Value::CreateTensor<float>(mem, x_buf.data(), x_buf.size(), x_shape.data(), x_shape.size());
+    Ort::Value h_tensor = Ort::Value::CreateTensor<float>(
+        mem, impl_->h_state.data(), impl_->h_state.size(), impl_->h_shape.data(), impl_->h_shape.size());
+
+    std::array<const char*, 2> in_names{impl_->x_name.c_str(), impl_->h_name.c_str()};
+    std::array<Ort::Value, 2> in_values{std::move(x_tensor), std::move(h_tensor)};
+    std::vector<const char*> out_names;
+    out_names.reserve(impl_->output_names.size());
+    for (const auto& n : impl_->output_names) {
+        out_names.push_back(n.c_str());
+    }
+    try {
+        auto outputs = impl_->session->Run(Ort::RunOptions{nullptr}, in_names.data(), in_values.data(),
+                                           in_values.size(), out_names.data(), out_names.size());
+        float vel = 0.0f;
+        float var = -1.0f;
+        bool have_vel = false;
+        bool have_h = false;
+        for (std::size_t i = 0; i < outputs.size(); ++i) {
+            const std::string& nm = impl_->output_names[i];
+            if (nameIs(nm, "velocity_mps")) {
+                vel = *outputs[i].GetTensorData<float>();
+                have_vel = true;
+            } else if (nameContains(nm, "variance")) {
+                var = *outputs[i].GetTensorData<float>();
+            } else if (nameContains(nm, "h_out") || nameContains(nm, "hidden")) {
+                const float* h_data = outputs[i].GetTensorData<float>();
+                std::memcpy(impl_->h_state.data(), h_data, impl_->h_state.size() * sizeof(float));
+                have_h = true;
+            }
+        }
+        if (!have_h) {
+            /* No output matched the hidden-state name convention: do not silently keep running
+               with a stale/zero state, since that would quietly degrade to a stateless estimator. */
+            impl_->last_error = "GRU streaming ONNX: no h_out-like output found";
+            return out;
+        }
+        if (!have_vel || !std::isfinite(vel) || vel < 0.0f) {
+            return out;
+        }
+        out.velocity_mps = vel;
+        out.variance_m2s2 = (var > 0.0f && std::isfinite(var)) ? var : 0.05f;
         out.valid = true;
     } catch (...) {
         out.valid = false;
