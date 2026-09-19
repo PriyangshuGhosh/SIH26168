@@ -49,6 +49,8 @@ IDR_API void idr_feed_imu(double timestamp, double ax, double ay, double az, dou
                           double gz);
 /* `speed` is m/s, or NaN when the receiver reports no speed (never 0.0 for "unknown":
    0.0 is a real stationary speed measurement). */
+/* `speed` is m/s, or NaN when the receiver reports no speed (never 0.0 for "unknown":
+   0.0 is a real stationary speed measurement). */
 IDR_API void idr_feed_gnss(double timestamp, double lat, double lon, double alt, double speed,
                            double hdop, int num_sats);
 
