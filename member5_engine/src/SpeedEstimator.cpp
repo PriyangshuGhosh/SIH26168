@@ -41,8 +41,16 @@ SpeedEstimate MockSpeedEstimator::predict(const float* samples_t6, int n_samples
     const double mean_ax = sum_ax / n_samples;
     const double mean_gyro = sum_gyro / n_samples;
     if (std::abs(mean_ax) < 0.35 && mean_gyro < 0.15) {
-        v_mps_ = 0.0f;
-        have_v_ = true;
+        if (!have_v_) {
+            v_mps_ = 0.0f;
+            have_v_ = true;
+        }
+        /* else: hold the previously established speed. Near-zero net acceleration is
+           consistent with BOTH "stationary" and "cruising at constant speed" -- only a cold
+           start (no prior estimate to trust) should default to 0 here. A real stop is
+           reached through the integration branch below (sustained negative ax_tail during
+           braking decrementing v_mps_ toward 0), not by resetting on every quasi-static
+           window regardless of prior evidence. */
     } else if (!have_v_) {
         v_mps_ = static_cast<float>(std::max(0.0, mean_ax * kInferDt));
         have_v_ = true;
