@@ -162,9 +162,9 @@ class MainActivity : ComponentActivity(), LocationListener {
             EngineBridge.selectMap(location.latitude, location.longitude)
             EngineBridge.feedGnss(
                 t, location.latitude, location.longitude, location.altitude,
-                if (speed.isFinite()) speed else 0.0, hdop, 8
+                speed, hdop, 8 // speed is NaN when !hasSpeed(): unknown, never 0.0
             )
-            sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, if (speed.isFinite()) speed else 0.0, hdop, 8)
+            sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, speed, hdop, 8)
         }
         vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(),
             if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed, preFeedEstimate)
