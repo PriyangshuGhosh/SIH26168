@@ -77,9 +77,6 @@ class EkfFusion:
 
     def _update(self, z: np.ndarray, H: np.ndarray, R: np.ndarray, gate: float) -> bool:
         y = z - H @ self.x
-        if H.shape[0] >= 1 and H.shape[1] > 4:
-            # wrap yaw residual if measuring yaw
-            pass
         S = H @ self.P @ H.T + R
         try:
             nis = float(y.T @ np.linalg.solve(S, y))
@@ -99,8 +96,8 @@ class EkfFusion:
     def update_gnss(self, gnss: GnssSample, degraded: bool = False) -> bool:
         if not gnss.valid or not self.initialized:
             return False
-        px, py = self.origin.to_xy(gnss.lat, gnss.lon)
         scale = 8.0 if degraded else 1.0
+        px, py = self.origin.to_xy(gnss.lat, gnss.lon)
         z = np.array([px, py, max(0.0, gnss.speed)])
         H = np.zeros((3, 8))
         H[0, 0] = 1.0
@@ -132,26 +129,12 @@ class EkfFusion:
         if not self.initialized:
             return False
         yaw = float(self.x[4])
-        # body lateral velocity ≈ 0: -vx sin + vy cos
         H = np.zeros((1, 8))
         H[0, 2] = -math.sin(yaw)
         H[0, 3] = math.cos(yaw)
         z = np.array([0.0])
         R = np.array([[0.15]])
         return self._update(z, H, R, gate=8.0)
-
-    def update_vision_delta(self, dx: float, dy: float, var: float) -> bool:
-        if not self.initialized:
-            return False
-        H = np.zeros((2, 8))
-        H[0, 0] = 1.0
-        H[1, 1] = 1.0
-        z = np.array([self.x[0] + dx, self.x[1] + dy])
-        R = np.diag([var, var])
-        ok = self._update(z, H, R, gate=10.0)
-        if ok:
-            self.mode = NavMode.VISION_AIDED
-        return ok
 
     def update_v2x(self, lat: float, lon: float, var: float) -> bool:
         if not self.initialized:
@@ -165,8 +148,7 @@ class EkfFusion:
         return self._update(z, H, R, gate=12.0)
 
     def set_dead_reckoning(self) -> None:
-        if self.mode != NavMode.VISION_AIDED:
-            self.mode = NavMode.DEAD_RECKONING
+        self.mode = NavMode.DEAD_RECKONING
 
     def state(self, timestamp: float, speed_valid: bool) -> NavigationState:
         lat, lon = self.origin.to_ll(float(self.x[0]), float(self.x[1]))
