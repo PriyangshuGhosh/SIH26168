@@ -23,6 +23,12 @@ public:
     virtual int requiredWindowSamples() const { return 200; }
     virtual const char* backendName() const = 0;
     virtual const char* lastError() const { return ""; }
+    /* Clears any persisted internal state (e.g. a stateful estimator's recurrent hidden state).
+       Default no-op: only meaningful for a stateful backend (GruStreamingSpeedEstimator). Engine
+       calls this on load (fresh estimator, so normally redundant with construction -- kept explicit
+       for robustness) and whenever Member 2 reports CalibrationStatus::INVALID (the one condition
+       Engine::handleImu already special-cases as a discontinuity). */
+    virtual void reset() {}
 };
 
 class MockSpeedEstimator final : public ISpeedEstimator {
@@ -47,6 +53,34 @@ public:
     int requiredWindowSamples() const override;
     const char* backendName() const override { return "onnxruntime"; }
     const char* lastError() const override;
+
+private:
+    struct Impl;
+    Impl* impl_{nullptr};
+};
+
+/* Stateful streaming candidate (docs/gru_velocity.md, member1-ml/scripts/train_gru_streaming.py).
+   Loads an ONNX graph with two inputs (a single decimated IMU sample [1,1,6] and the previous
+   recurrent hidden state [layers,1,hidden]) and four outputs (velocity_mps, velocity_variance_m2s2,
+   confidence, the next hidden state) -- e.g.
+   member1-ml/experiments/m1_gru_stream2_gru_w20/streaming.onnx. predict() is called by Engine with
+   the same raw [T,6] tail-of-window layout as OnnxSpeedEstimator (requiredWindowSamples() stays
+   >= 8 so Engine's existing model_T_ clamp is untouched); this estimator uses only the LAST sample
+   of that window (the causal "keep the most recent real sample of every N" convention already used
+   throughout this codebase -- see docs/production_100hz.md) and feeds it through the recurrent
+   graph, carrying hidden state across calls in impl_ until reset(). NOT independently build/test
+   verified in the environment this was written in -- see docs/gru_velocity.md "C++ integration"
+   before enabling in a real build. */
+class GruStreamingSpeedEstimator final : public ISpeedEstimator {
+public:
+    GruStreamingSpeedEstimator();
+    ~GruStreamingSpeedEstimator() override;
+    bool load(const std::string& model_path) override;
+    SpeedEstimate predict(const float* samples_t6, int n_samples) override;
+    int requiredWindowSamples() const override;
+    const char* backendName() const override { return "onnxruntime_gru_streaming"; }
+    const char* lastError() const override;
+    void reset() override;
 
 private:
     struct Impl;

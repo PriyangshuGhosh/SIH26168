@@ -146,6 +146,7 @@ void FrameAligner::reset() {
     gravity_conf_ = 0.0;
     yaw_conf_ = 0.0;
     static_streak_s_ = 0.0;
+    phone_moved_streak_s_ = 0.0;
 }
 
 void FrameAligner::feedGnss(const OptionalGnssAid& aid) {
@@ -221,7 +222,7 @@ AlignedIMUFrame FrameAligner::process(double timestamp,
         updateGravity(acc, timestamp);
     } else {
         static_streak_s_ = 0.0;
-        checkPhoneMoved(acc);
+        checkPhoneMoved(acc, (vr.dt > 0.0) ? vr.dt : cfg_.nominal_dt());
     }
 
     if (g_initialized_) {
@@ -369,27 +370,42 @@ void FrameAligner::updateGravity(const Eigen::Vector3d& acc, double t) {
     }
 }
 
-void FrameAligner::checkPhoneMoved(const Eigen::Vector3d& acc) {
+void FrameAligner::checkPhoneMoved(const Eigen::Vector3d& acc, double dt) {
     if (!g_initialized_) {
         return;
     }
     const double an = acc.norm();
     if (an < 1.0) {
+        phone_moved_streak_s_ = 0.0;
         return;
     }
     const Eigen::Vector3d up_meas = acc / an;
     const double dot = std::clamp(g_up_p_.dot(up_meas), -1.0, 1.0);
     const double ang = std::acos(dot);
-    if (ang > 0.6 &&
+    const bool condition =
+        ang > 0.6 &&
         (status_ == CalibrationStatus::FULLY_ALIGNED || status_ == CalibrationStatus::YAW_UNCERTAIN ||
-         status_ == CalibrationStatus::ROLL_PITCH_VALID)) {
-        if (std::abs(an - cfg_.gravity_mps2) < 2.5) {
-            status_ = CalibrationStatus::REINITIALIZING;
-            clearYaw();
-            g_initialized_ = false;
-            gravity_conf_ = 0.0;
-        }
+         status_ == CalibrationStatus::ROLL_PITCH_VALID) &&
+        std::abs(an - cfg_.gravity_mps2) < 2.5;
+    if (!condition) {
+        phone_moved_streak_s_ = 0.0;
+        return;
     }
+    // A genuine phone pick-up/reorientation is sustained; a single sample this far off "up" with
+    // |a| still near gravity is the signature of a transient road shock/pothole (verified
+    // forensically on real IO-VNBD 10 Hz driving data -- see
+    // member1-ml/docs/gru_velocity.md "M2 forensic fix"), not sustained handling. Debouncing over
+    // a minimum WALL-CLOCK duration (not a fixed sample count) is rate-independent, mirroring
+    // member2_alignment/python/sih26168_alignment/frame_aligner.py's fix exactly.
+    phone_moved_streak_s_ += (dt > 0.0) ? dt : cfg_.nominal_dt();
+    if (phone_moved_streak_s_ < cfg_.phone_moved_min_duration_s) {
+        return;
+    }
+    phone_moved_streak_s_ = 0.0;
+    status_ = CalibrationStatus::REINITIALIZING;
+    clearYaw();
+    g_initialized_ = false;
+    gravity_conf_ = 0.0;
 }
 
 void FrameAligner::clearYaw() {

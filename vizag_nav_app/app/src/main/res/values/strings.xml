@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Navigo</string>
+    <string name="mode_gps">GPS Active</string>
+    <string name="mode_dr">Dead Reckoning (ML)</string>
+    <string name="mode_init">Initializing…</string>
+</resources>
