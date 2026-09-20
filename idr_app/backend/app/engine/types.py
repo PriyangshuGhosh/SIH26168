@@ -17,7 +17,6 @@ class NavMode(str, Enum):
     GNSS = "GNSS"
     GNSS_DEGRADED = "GNSS_DEGRADED"
     DEAD_RECKONING = "DEAD_RECKONING"
-    VISION_AIDED = "VISION_AIDED"
 
 
 class GnssQuality(str, Enum):
@@ -30,13 +29,6 @@ class MapStatus(str, Enum):
     ON_NETWORK = "ON_NETWORK"
     OFF_NETWORK = "OFF_NETWORK"
     MAP_DATA_NOT_AVAILABLE = "MAP DATA NOT AVAILABLE"
-
-
-class VisionDecision(str, Enum):
-    ACCEPT = "Accept"
-    DOWNWEIGHT = "Downweight"
-    REJECT = "Reject"
-    UNAVAILABLE = "Unavailable"
 
 
 @dataclass
@@ -135,8 +127,6 @@ class IdrOutput:
     road_segment_id: int
     alignment_status: CalibrationStatus
     alignment_confidence: float
-    vision_decision: VisionDecision
-    vision_quality: float
     v2x_decision: str
     pos_std_m: float
     sats: int
