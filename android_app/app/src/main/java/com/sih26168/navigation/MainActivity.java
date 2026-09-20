@@ -13,6 +13,8 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 42;
     private WebView webView;
+    private String pendingOrigin;
+    private GeolocationPermissions.Callback pendingCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,6 +27,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setGeolocationEnabled(true);
         settings.setBuiltInZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
 
@@ -59,9 +62,6 @@ public class MainActivity extends Activity {
             loadApp();
         }
     }
-
-    private String pendingOrigin;
-    private GeolocationPermissions.Callback pendingCallback;
 
     private void loadApp() {
         webView.loadUrl("file:///android_asset/web/index.html");
