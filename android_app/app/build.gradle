@@ -37,7 +37,6 @@ android {
 }
 
 tasks.register("prepareWebAssets") {
-    dependsOn(":noop")
     doLast {
         def webRoot = file("$rootDir/../dist")
         if (!webRoot.exists()) {
