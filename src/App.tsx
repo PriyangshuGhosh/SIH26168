@@ -45,14 +45,25 @@ export default function App() {
   const [injectedSpeedMps, setInjectedSpeedMps] = useState<number | null>(null);
   const [gnssBlackout, setGnssBlackout] = useState(false);
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
-  const [realSensorState, setRealSensorState] = useState<RealSensorState>({
-    isSupported: typeof window !== "undefined" && "DeviceMotionEvent" in window,
+  const [realSensorState, setRealSensorState] = useState<RealSensorState>(() => ({
+    isSupported: typeof window !== "undefined" && ("DeviceMotionEvent" in window || "ondevicemotion" in window),
     permissionGranted: false,
     isStreaming: false,
     gpsActive: false,
     motionActive: false,
     error: null,
-  });
+    rawImu: {
+      ax: 0, ay: 0, az: 9.81, accelMag: 9.81,
+      gx: 0, gy: 0, gz: 0,
+      alpha: null, beta: null, gamma: null,
+      rateHz: 0, eventCount: 0, lastUpdateMs: 0,
+    },
+    rawGps: {
+      latitudeDeg: null, longitudeDeg: null, altitudeM: null,
+      accuracyM: null, speedMps: null, headingDeg: null,
+      available: false, lastFixMs: 0, error: null,
+    },
+  }));
 
   // Engine instances in refs
   const engineRef = useRef<MemberFiveEngine>(new MemberFiveEngine());
