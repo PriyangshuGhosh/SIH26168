@@ -229,7 +229,7 @@ int main() {
     {
         std::ofstream csv(csv_path);
         if (!csv) {
-            std::fprintf(stderr, "cannot write %s — run from the repository root\n", csv_path);
+            std::fprintf(stderr, "cannot write %s ï¿½ run from the repository root\n", csv_path);
             idr_engine_shutdown();
             return 1;
         }
@@ -275,6 +275,6 @@ int main() {
         std::printf("RESULT: FAIL (%d checks)\n", failed);
         return 1;
     }
-    std::printf("RESULT: PASS — pipeline uses real M2/M3/M4 with explicit mock M1\n");
+    std::printf("RESULT: PASS ï¿½ pipeline uses real M2/M3/M4 with explicit mock M1\n");
     return 0;
 }

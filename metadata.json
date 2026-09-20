@@ -1,0 +1,6 @@
+{
+  "name": "SIH26168 Navigation System",
+  "description": "Intelligent GNSS-denied navigation system with dead reckoning, sensor fusion, map matching, and speed guard diagnostics.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

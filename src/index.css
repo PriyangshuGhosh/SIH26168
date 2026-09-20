@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #070b0e;
+    color: #e1e7ec;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom dark tile filter for Leaflet OpenStreetMap */
+.leaflet-tile {
+  filter: brightness(0.68) contrast(1.18) invert(1) hue-rotate(180deg) saturate(0.85);
+}
+
+.leaflet-container {
+  background-color: #070b0e !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090e12;
+}
+::-webkit-scrollbar-thumb {
+  background: #1b2631;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3a4a;
+}

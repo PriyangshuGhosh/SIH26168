@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "SIH26168 Navigation System",
+  "short_name": "EdgeNav",
+  "description": "Intelligent GNSS-denied navigation system with dead reckoning, sensor fusion, map matching, and speed guard diagnostics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#070b0e",
+  "background_color": "#070b0e",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
