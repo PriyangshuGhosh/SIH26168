@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.sih26168.navigation"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.sih26168.navigation"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir("$projectDir/src/main/assets")
+        }
+    }
+}
+
+tasks.register("prepareWebAssets") {
+    dependsOn(":noop")
+    doLast {
+        def webRoot = file("$rootDir/../dist")
+        if (!webRoot.exists()) {
+            throw new GradleException("Web build missing. Run: npm run build:web")
+        }
+        def out = file("$projectDir/src/main/assets/web")
+        delete(out)
+        copy {
+            from webRoot
+            into out
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("prepareWebAssets")
+}
