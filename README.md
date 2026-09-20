@@ -2,23 +2,13 @@
 
 Repository for the SIH26168 intelligent GNSS-denied navigation system.
 
-## Differentiator: Vision + Depth
+## Core Navigation Pipeline
 
-We are investigating a **confidence-aware visual-inertial-depth layer** as an additional sensing modality during GNSS outages. Camera-derived scene geometry and visual motion will be fused with the existing IMU + AI speed + EKF pipeline, with automatic confidence gating and fallback when vision is unreliable.
-
-See the design and experimental plan: **[docs/VISION_DEPTH_DIFFERENTIATOR.md](docs/VISION_DEPTH_DIFFERENTIATOR.md)**
-
-> Monocular depth is not treated as a direct metric localization solution because of scale ambiguity. The goal is to combine visual geometry/motion with IMU and vehicle constraints and prove improvement experimentally.
-
-## Team Work Distribution & Deliverables
-
-The complete production-grade work distribution, interface contracts, module dependencies, integration gates, engineering rules, and deliverables are maintained in:
-
-**[docs/WORK_DISTRIBUTION.md](docs/WORK_DISTRIBUTION.md)**
-
-### Baseline Pipeline
+The implemented navigation stack is intentionally focused on non-vision sensing:
 
 `Phone IMU/GNSS → Frame Alignment → AI Speed Estimation → EKF/UKF Fusion → Offline HMM Map Matching → Native C++ Engine → Mobile Navigation UI`
+
+The system is designed to continue estimating vehicle trajectory during GNSS degradation/outage using inertial measurements, learned speed estimation, vehicle constraints, and road-network/map constraints.
 
 Host simulation (labelled **SIMULATION**, not phone sensors):
 
@@ -36,17 +26,21 @@ Android app (no `/sdcard` developer paths): Gradle project `app/` provisions `as
 
 See [docs/architecture/README.md](docs/architecture/README.md).
 
-### Enhanced Experimental Pipeline
-
-`Phone Camera → Depth/Visual Motion → Confidence → EKF/UKF Fusion`
-
-The enhanced path is auxiliary: if camera quality is poor or the vision module fails, navigation falls back to the baseline IMU + AI-speed + map pipeline.
-
-### Integration Order
+## Integration Order
 
 **Member 2 → Member 1 → Member 3 → Member 4 → Member 5 → Member 6**
 
-The vision/depth track is integrated experimentally across Members 3, 5, and 6 after the baseline pipeline is stable.
+## Future Extension: V2X / OBU Cooperative Localization
+
+A future hardware phase can extend the current phone-based navigation stack with **V2X communication and an in-vehicle OBU (On-Board Unit)**. The vehicle/OBU can provide cooperative localization measurements such as vehicle position, velocity, heading, and time-synchronized state information, while roadside infrastructure or nearby vehicles can provide additional spatial references.
+
+The intended architecture is:
+
+`Phone IMU + AI Speed + EKF + HMM Map Matching ← V2X/OBU cooperative measurements`
+
+V2X measurements should be treated as another uncertainty-aware EKF measurement source rather than as an unconditional replacement for the existing estimator. Each received message can be validated for freshness, plausibility, coordinate/frame consistency, and reported uncertainty before fusion. This allows the system to fall back gracefully to the existing dead-reckoning pipeline when V2X coverage or communication quality is poor.
+
+The repository currently contains a **software-only V2X simulation** under `sih26168_v2x/`. It is not a physical C-V2X/DSRC radio implementation and must not be presented as hardware-validated V2X.
 
 ## Mode-A V2X demo (simulation visualization)
 
@@ -93,7 +87,6 @@ PYTHONPATH=sih26168_v2x/python python3 -m pytest sih26168_v2x/tests/python -q
 
 Do **not** treat this as real V2X until hardware exists and is tested.
 
-
 ```bash
 python3 -m pip install -r member2_alignment/requirements.txt
 python3 -m pip install -r member4_map_matching/requirements.txt
@@ -103,4 +96,3 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 PYTHONPATH=member4_map_matching/python python3 -m pytest member4_map_matching/tests/python -q
 ```
-
