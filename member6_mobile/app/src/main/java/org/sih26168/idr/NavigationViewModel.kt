@@ -21,8 +21,8 @@ data class NavUiState(
     val rawGps: RawGpsView? = null,
     val simulateOutage: Boolean = false,
     val mapUnavailable: Boolean = false,
-    val hardwareNote: String = "REAL HARDWARE VALIDATION: NOT VALIDATED",
-    val accuracyNote: String = "SIH GNSS-denied accuracy: NOT VALIDATED",
+    val hardwareNote: String = "",
+    val accuracyNote: String = "",
     val engineError: String? = null,
     val initialized: Boolean = false,
     val outageLive: Boolean = false,
@@ -51,6 +51,8 @@ class NavigationViewModel(
 
     fun setRoads(graph: RoadpackGraph?) { _state.update { it.copy(roads = graph) } }
     fun setStorage(info: StorageInfo?) { _state.update { it.copy(storage = info) } }
+    fun setHardwareNote(note: String?) { _state.update { it.copy(hardwareNote = note.orEmpty()) } }
+    fun setAccuracyNote(note: String?) { _state.update { it.copy(accuracyNote = note.orEmpty()) } }
 
     fun toggleOutage() {
         val next = !_state.value.simulateOutage

@@ -100,7 +100,12 @@ fun NavigationScreen(
                                 else "  speed n/a"
                     )
                     Text("Validated speed: ${state.speedLabel}  (no silent clamp)")
+                    if (state.engineError != null) {
+                        Text("ENGINE ERROR: ${state.engineError}", color = DrOrange, fontWeight = FontWeight.Bold)
+                    }
                     if (state.mapUnavailable) Text("MAP DATA NOT AVAILABLE", color = DrOrange, fontWeight = FontWeight.Bold)
+                    if (state.hardwareNote.isNotBlank()) Text(state.hardwareNote, color = DrOrange, fontSize = 11.sp)
+                    if (state.accuracyNote.isNotBlank()) Text(state.accuracyNote, color = DrOrange, fontSize = 11.sp)
                     Text("Region ${state.activeRegionId.ifBlank { "—" }}")
                     Button(onClick = onToggleOutage, Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Text(if (state.simulateOutage) "Restore GNSS feed" else "Simulate GNSS outage")
@@ -130,20 +135,20 @@ private fun EngineeringBlock(state: NavUiState) {
             fontSize = 12.sp
         )
         Text(
-            "Outage \${"%.1f".format(it.durationS)} s\${if (it.simulated) " (SIMULATED feed cut)" else ""}",
+            "Outage ${"%.1f".format(it.durationS)} s${if (it.simulated) " (SIMULATED feed cut)" else ""}",
             fontSize = 11.sp
         )
         it.lastGpsBeforeOutage?.let { g ->
-            Text("Last valid GNSS \${"%.6f".format(g.lat)}, \${"%.6f".format(g.lon)}", fontSize = 11.sp)
+            Text("Last valid GNSS ${"%.6f".format(g.lat)}, ${"%.6f".format(g.lon)}", fontSize = 11.sp)
         }
-        Text("Est at restore \${"%.6f".format(it.estimatedAtRestore.lat)}, \${"%.6f".format(it.estimatedAtRestore.lon)}", fontSize = 11.sp)
-        Text("Restored GNSS  \${"%.6f".format(it.restoredGps.lat)}, \${"%.6f".format(it.restoredGps.lon)}", fontSize = 11.sp)
+        Text("Est at restore ${"%.6f".format(it.estimatedAtRestore.lat)}, ${"%.6f".format(it.estimatedAtRestore.lon)}", fontSize = 11.sp)
+        Text("Restored GNSS  ${"%.6f".format(it.restoredGps.lat)}, ${"%.6f".format(it.restoredGps.lon)}", fontSize = 11.sp)
         it.gpsDisplacementDuringOutageMeters?.let { gap ->
             Text("GPS displacement during outage (not drift): ${"%.2f".format(gap)} m", fontSize = 11.sp)
         }
     }
-    Text(state.hardwareNote, fontSize = 11.sp, color = DrOrange)
-    Text(state.accuracyNote, fontSize = 11.sp, color = DrOrange)
+    if (state.hardwareNote.isNotBlank()) Text(state.hardwareNote, fontSize = 11.sp, color = DrOrange)
+    if (state.accuracyNote.isNotBlank()) Text(state.accuracyNote, fontSize = 11.sp, color = DrOrange)
     val v = state.v2v
     if (v != null) {
         Text("V2V ${v.libraryStatus} / ${v.androidAdapterStatus}", fontSize = 11.sp)

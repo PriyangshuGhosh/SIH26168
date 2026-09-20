@@ -46,14 +46,12 @@ class MainActivity : ComponentActivity(), LocationListener {
         AssetProvisioner.copyAssetTree(this, "maps", mapsDir)
         roadMgr = LocalRoadDataManager(mapsDir)
         val manifest = File(mapsDir, "manifest.json")
-        val onnxAsset = File(filesDir, "speed_estimator.onnx")
-        val onnxPath = if (onnxAsset.exists() && onnxAsset.length() > 16 && !onnxAsset.readText().trim().startsWith("mock")) {
-            onnxAsset.absolutePath
-        } else {
-            "mock"
-        }
+        val onnxPath = OnnxResolver.resolve(filesDir)
         val ok = EngineBridge.init(manifest.absolutePath, onnxPath)
-        vm.markEngine(ok, if (ok) null else EngineBridge.lastError().ifBlank { "init failed" })
+        val initError = if (ok) null else EngineBridge.lastError().ifBlank { "init failed" }
+        vm.markEngine(ok, initError)
+        vm.setHardwareNote(if (ok) "Native engine initialized successfully." else "Native engine failed: $initError")
+        vm.setAccuracyNote(if (!ok) "Map/accuracy feed unavailable until native engine initializes." else "")
         vm.setStorage(roadMgr.storageInfo())
         sessionLog = SessionLogger(File(filesDir, "logs/session.jsonl"))
 
@@ -136,8 +134,10 @@ class MainActivity : ComponentActivity(), LocationListener {
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
         if (need.any { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
+            vm.setHardwareNote("Location permission missing: GNSS feed disabled until permission is granted.")
             permissionLauncher.launch(need)
         } else {
+            vm.setHardwareNote(if (EngineBridge.isInitialized()) "Sensors ready: GNSS and IMU bridge active." else "GNSS permission granted; waiting for native engine initialization.")
             startGnss()
         }
     }
@@ -166,8 +166,9 @@ class MainActivity : ComponentActivity(), LocationListener {
             )
             sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, speed, hdop, 8)
         }
-        vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(),
-            if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed, preFeedEstimate)
+        val acc = if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN
+        vm.setAccuracyNote(if (!location.hasAccuracy()) "GNSS accuracy unavailable: sink fix is missing accuracy metadata." else "")
+        vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(), acc, feed, preFeedEstimate)
         roadMgr.selectForLocation(location.latitude, location.longitude)
         vm.setStorage(roadMgr.storageInfo())
         if (!roadsLoaded) {

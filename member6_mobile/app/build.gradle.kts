@@ -3,6 +3,37 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val ortAndroidRoot = file("${projectDir}/src/main/onnxruntime")
+val ortAndroidAar = "com.microsoft.onnxruntime:onnxruntime-android:1.19.2"
+val ortAndroidConfig = configurations.detachedConfiguration(project.dependencies.create(ortAndroidAar))
+
+tasks.register("extractOnnxRuntimeAndroid", Copy::class) {
+    doFirst {
+        delete(ortAndroidRoot)
+    }
+    from(zipTree(ortAndroidConfig.singleFile)) {
+        include("jni/**")
+        eachFile {
+            val path = relativePath.segments.joinToString("/")
+            if (path.startsWith("jni/")) {
+                relativePath = RelativePath(true, *("lib" + path.removePrefix("jni")).split("/").filter { it.isNotEmpty() }.toTypedArray())
+            }
+        }
+        includeEmptyDirs = false
+    }
+    from(zipTree(ortAndroidConfig.singleFile)) {
+        include("headers/**")
+        eachFile {
+            val path = relativePath.segments.joinToString("/")
+            if (path.startsWith("headers/")) {
+                relativePath = RelativePath(true, *("include/" + path.removePrefix("headers/")).split("/").filter { it.isNotEmpty() }.toTypedArray())
+            }
+        }
+        includeEmptyDirs = false
+    }
+    into(ortAndroidRoot)
+}
+
 android {
     namespace = "org.sih26168.idr"
     compileSdk = 34
@@ -20,15 +51,23 @@ android {
             cmake {
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
-                    "-DSIH26168_BUILD_HOST_TOOLS=OFF"
+                    "-DSIH26168_BUILD_HOST_TOOLS=OFF",
+                    "-DIDR_WITH_ONNXRUNTIME=ON",
+                    "-DIDR_ONNXRUNTIME_ROOT=${ortAndroidRoot.absolutePath}"
                 )
                 targets += "idr_jni"
             }
         }
     }
     buildTypes {
-        getByName("debug") { isDebuggable = true }
-        getByName("release") { isMinifyEnabled = false }
+        getByName("debug") {
+            isDebuggable = true
+            buildConfigField("boolean", "ENABLE_ONNX_RUNTIME", "true")
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            buildConfigField("boolean", "ENABLE_ONNX_RUNTIME", "true")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -53,6 +92,19 @@ android {
             keepDebugSymbols += "**/*.so"
         }
     }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir("src/main/jniLibs")
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("extractOnnxRuntimeAndroid")
+}
+
+tasks.matching { it.name.startsWith("externalNativeBuild") }.configureEach {
+    dependsOn("extractOnnxRuntimeAndroid")
 }
 
 dependencies {
@@ -66,6 +118,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(ortAndroidAar)
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 }

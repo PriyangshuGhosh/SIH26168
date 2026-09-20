@@ -1,0 +1,227 @@
+From a987bd11012a6272b5b276ad1a2a40607bf4e96c Mon Sep 17 00:00:00 2001
+From: audit <audit@local>
+Date: Sat, 19 Sep 2026 09:43:08 +0000
+Subject: [PATCH] Missing GNSS speed is unknown (NaN -> speed_valid=false), not
+ 0.0 m/s; regression test
+
+---
+ member5_engine/include/idr_engine_api.h       |  2 +
+ member5_engine/include/member5/Engine.hpp     |  5 ++
+ member5_engine/src/Engine.cpp                 | 25 ++++----
+ member5_engine/tests/test_member5.cpp         | 57 +++++++++++++++++++
+ .../java/org/sih26168/idr/MainActivity.kt     |  4 +-
+ .../src/main/java/org/sih26168/idr/Replay.kt  |  7 ++-
+ 6 files changed, 85 insertions(+), 15 deletions(-)
+
+diff --git a/member5_engine/include/idr_engine_api.h b/member5_engine/include/idr_engine_api.h
+index 7531f96..4772aaa 100644
+--- a/member5_engine/include/idr_engine_api.h
++++ b/member5_engine/include/idr_engine_api.h
+@@ -47,6 +47,8 @@ IDR_API void idr_engine_shutdown(void);
+ 
+ IDR_API void idr_feed_imu(double timestamp, double ax, double ay, double az, double gx, double gy,
+                           double gz);
++/* `speed` is m/s, or NaN when the receiver reports no speed (never 0.0 for "unknown":
++   0.0 is a real stationary speed measurement). */
+ IDR_API void idr_feed_gnss(double timestamp, double lat, double lon, double alt, double speed,
+                            double hdop, int num_sats);
+ 
+diff --git a/member5_engine/include/member5/Engine.hpp b/member5_engine/include/member5/Engine.hpp
+index 6c24022..dd2ae4a 100644
+--- a/member5_engine/include/member5/Engine.hpp
++++ b/member5_engine/include/member5/Engine.hpp
+@@ -34,6 +34,11 @@ struct GnssSample {
+     int num_sats;
+ };
+ 
++/* Maps a GNSS sample to the Member 3 measurement. Missing/invalid speed (NaN, negative or inf;
++   e.g. Android Location.hasSpeed() == false) becomes speed_valid = false so the EKF applies the
++   position only. A real 0.0 m/s (stationary) stays a valid speed measurement. */
++sih26168::member3::GnssMeasurement toGnssMeasurement(const GnssSample& s);
++
+ class Engine {
+ public:
+     Engine();
+diff --git a/member5_engine/src/Engine.cpp b/member5_engine/src/Engine.cpp
+index d297d46..b6540c5 100644
+--- a/member5_engine/src/Engine.cpp
++++ b/member5_engine/src/Engine.cpp
+@@ -274,7 +274,7 @@ bool Engine::feedGnss(const GnssSample& s) {
+                 speed_reject_.clear();
+             } else {
+                 speed_valid_ = 0;
+-                speed_reject_ = "gnss_speed_rejected";
++                speed_reject_ = std::isfinite(s.speed) ? "gnss_speed_rejected" : "gnss_speed_unavailable";
+             }
+         }
+     }
+@@ -394,6 +394,19 @@ void Engine::workerLoop() {
+     }
+ }
+ 
++sih26168::member3::GnssMeasurement toGnssMeasurement(const GnssSample& s) {
++    sih26168::member3::GnssMeasurement g;
++    g.timestamp = s.timestamp;
++    g.latitude = s.lat;
++    g.longitude = s.lon;
++    g.altitude = s.alt;
++    g.speed_mps = s.speed;
++    g.speed_valid = SpeedValidityFilter::finiteNonNegative(s.speed);
++    g.hdop = s.hdop;
++    g.num_sats = s.num_sats;
++    return g;
++}
++
+ void Engine::handleGnss(const GnssSample& s) {
+     sih26168::member2::OptionalGnssAid aid;
+     aid.timestamp = s.timestamp;
+@@ -404,15 +417,7 @@ void Engine::handleGnss(const GnssSample& s) {
+ 
+     const auto mode = deficit_.observe(s.timestamp, s.hdop, s.num_sats);
+     if (mode == sih26168::member3::NavigationMode::GNSS_AIDED) {
+-        sih26168::member3::GnssMeasurement g;
+-        g.timestamp = s.timestamp;
+-        g.latitude = s.lat;
+-        g.longitude = s.lon;
+-        g.altitude = s.alt;
+-        g.speed_mps = s.speed;
+-        g.hdop = s.hdop;
+-        g.num_sats = s.num_sats;
+-        fusion_.updateGnss(g);
++        fusion_.updateGnss(toGnssMeasurement(s));
+     }
+     publishLocked();
+ }
+diff --git a/member5_engine/tests/test_member5.cpp b/member5_engine/tests/test_member5.cpp
+index 76ccee9..f5204b3 100644
+--- a/member5_engine/tests/test_member5.cpp
++++ b/member5_engine/tests/test_member5.cpp
+@@ -2,6 +2,7 @@
+ #include "member2/FrameAligner.hpp"
+ #include "member3/EKFFusionEngine.hpp"
+ #include "member4/MapMatchingEngine.hpp"
++#include "member5/Engine.hpp"
+ #include "member5/GnssDeficitMachine.hpp"
+ #include "member5/SpscRing.hpp"
+ #include "member5/ImuTimestampPairer.hpp"
+@@ -307,6 +308,59 @@ int test_onnx_path() {
+     return 0;
+ }
+ 
++/* Regression: a GNSS fix without speed (Android hasSpeed()==false -> NaN) must not reach the EKF
++   as an artificial 0 m/s measurement. A real 0.0 m/s must still be a valid measurement. */
++int test_gnss_without_speed_is_not_zero_measurement() {
++    using sih26168::member3::EKFFusionEngine;
++    using sih26168::member3::NavigationMode;
++    using sih26168::member5::GnssSample;
++    using sih26168::member5::toGnssMeasurement;
++    const double nan = std::numeric_limits<double>::quiet_NaN();
++    const double lat = 12.9716;
++    const double lon = 77.5946;
++
++    CHECK(!toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, nan, 1.0, 10}).speed_valid);
++    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 0.0, 1.0, 10}).speed_valid);
++    CHECK(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}).speed_valid);
++
++    /* Establish ~1.3 m/s with real speed fixes, then apply a same-position fix at t=0.3 that either
++       has no speed (NaN) or a real 0.0 m/s; only the latter may pull the velocity down. */
++    auto speed_after = [&](double third_fix_speed, bool position_only, bool* accepted) {
++        EKFFusionEngine ekf;
++        sih26168::member2::AlignedIMUFrame f{};
++        f.az_v = 9.80665;
++        f.status = sih26168::member2::CalibrationStatus::FULLY_ALIGNED;
++        ekf.updateGnss(toGnssMeasurement(GnssSample{0.0, lat, lon, 900.0, 1.5, 1.0, 10}));
++        for (int i = 1; i <= 2; ++i) {
++            f.timestamp = 0.1 * i;
++            ekf.predict(f, NavigationMode::GNSS_AIDED);
++            ekf.updateGnss(toGnssMeasurement(GnssSample{0.1 * i, lat, lon, 900.0, 1.5, 1.0, 10}));
++        }
++        f.timestamp = 0.3;
++        ekf.predict(f, NavigationMode::GNSS_AIDED);
++        const double before = ekf.state().v_x;
++        auto m = toGnssMeasurement(GnssSample{0.3, lat, lon, 900.0, third_fix_speed, 1.0, 10});
++        if (position_only) {
++            m.speed_valid = false; /* Member 3's explicit position-only convention */
++        }
++        ekf.updateGnss(m);
++        if (accepted != nullptr) {
++            *accepted = ekf.state().last_gnss_accepted;
++        }
++        return std::make_pair(before, ekf.state().v_x);
++    };
++
++    bool none_accepted = false;
++    const auto none = speed_after(nan, false, &none_accepted);
++    const auto position_only = speed_after(1.5, true, nullptr);
++    const auto zero = speed_after(0.0, false, nullptr);
++    CHECK(none.first > 0.5);                                   /* speed was really established */
++    CHECK(none_accepted);                                      /* position still applied */
++    CHECK(std::abs(none.second - position_only.second) < 1e-12); /* NaN == position-only update */
++    CHECK(zero.second < none.second - 0.2);                    /* a fake 0.0 would have pulled it down */
++    return 0;
++}
++
+ int test_speed_validity_matrix() {
+     using sih26168::member5::SpeedValidityFilter;
+     using sih26168::member5::SpeedRejectReason;
+@@ -508,6 +562,9 @@ int main() {
+     if (test_onnx_path() != 0) {
+         return 1;
+     }
++    if (test_gnss_without_speed_is_not_zero_measurement() != 0) {
++        return 1;
++    }
+     if (test_speed_validity_matrix() != 0) {
+         return 1;
+     }
+diff --git a/member6_mobile/app/src/main/java/org/sih26168/idr/MainActivity.kt b/member6_mobile/app/src/main/java/org/sih26168/idr/MainActivity.kt
+index e398453..8869909 100644
+--- a/member6_mobile/app/src/main/java/org/sih26168/idr/MainActivity.kt
++++ b/member6_mobile/app/src/main/java/org/sih26168/idr/MainActivity.kt
+@@ -162,9 +162,9 @@ class MainActivity : ComponentActivity(), LocationListener {
+             EngineBridge.selectMap(location.latitude, location.longitude)
+             EngineBridge.feedGnss(
+                 t, location.latitude, location.longitude, location.altitude,
+-                if (speed.isFinite()) speed else 0.0, hdop, 8
++                speed, hdop, 8 // speed is NaN when !hasSpeed(): unknown, never 0.0
+             )
+-            sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, if (speed.isFinite()) speed else 0.0, hdop, 8)
++            sessionLog?.gnss(t, location.latitude, location.longitude, location.altitude, speed, hdop, 8)
+         }
+         vm.onRawGps(t, location.latitude, location.longitude, speed, location.hasSpeed(),
+             if (location.hasAccuracy()) location.accuracy.toDouble() else Double.NaN, feed, preFeedEstimate)
+diff --git a/member6_mobile/app/src/main/java/org/sih26168/idr/Replay.kt b/member6_mobile/app/src/main/java/org/sih26168/idr/Replay.kt
+index 7879bb6..733c7eb 100644
+--- a/member6_mobile/app/src/main/java/org/sih26168/idr/Replay.kt
++++ b/member6_mobile/app/src/main/java/org/sih26168/idr/Replay.kt
+@@ -16,7 +16,7 @@ data class ReplayEvent(
+     val lat: Double = Double.NaN,
+     val lon: Double = Double.NaN,
+     val alt: Double = 0.0,
+-    val speed: Double = 0.0,
++    val speed: Double = Double.NaN, /* NaN = no speed reported (unknown, not 0 m/s) */
+     val hdop: Double = 1.0,
+     val sats: Int = 8,
+     val outage: Boolean = false
+@@ -61,7 +61,7 @@ object ReplayParser {
+                     gy = num("gy").takeIf { it.isFinite() } ?: 0.0,
+                     gz = num("gz").takeIf { it.isFinite() } ?: 0.0,
+                     lat = num("lat"), lon = num("lon"), alt = num("alt").takeIf { it.isFinite() } ?: 0.0,
+-                    speed = num("speed").takeIf { it.isFinite() } ?: 0.0,
++                    speed = num("speed"),
+                     hdop = num("hdop").takeIf { it.isFinite() } ?: 1.0,
+                     sats = num("sats").toInt().takeIf { it > 0 } ?: 8,
+                     outage = bool("active") || type == "outage" && bool("outage")
+@@ -82,7 +82,8 @@ class SessionLogger(private val file: File) {
+         append("""{"type":"imu","t":$t,"ax":$ax,"ay":$ay,"az":$az,"gx":$gx,"gy":$gy,"gz":$gz}""")
+     }
+     fun gnss(t: Double, lat: Double, lon: Double, alt: Double, speed: Double, hdop: Double, sats: Int) {
+-        append("""{"type":"gnss","t":$t,"lat":$lat,"lon":$lon,"alt":$alt,"speed":$speed,"hdop":$hdop,"sats":$sats}""")
++        val speedField = if (speed.isFinite()) ""","speed":$speed""" else "" // omitted = unknown
++        append("""{"type":"gnss","t":$t,"lat":$lat,"lon":$lon,"alt":$alt$speedField,"hdop":$hdop,"sats":$sats}""")
+     }
+     fun outage(t: Double, active: Boolean) {
+         append("""{"type":"outage","t":$t,"active":$active}""")
+-- 
+2.43.0
+

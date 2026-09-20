@@ -38,6 +38,26 @@ class SpeedAndMapUnitTest {
         assertEquals(0.1, s!!.ax, 1e-9)
         assertEquals(null, p.feedGyroNs(1_050_000_000L, 0.0, 0.0, 0.0))
     }
+
+    @Test
+    fun onnxResolverFallsBackToMockWhenModelUnavailableOrNativeOrtDisabled() {
+        val dir = java.io.File.createTempFile("onnx-resolver", "")
+        dir.delete()
+        dir.mkdirs()
+        assertEquals("mock", OnnxResolver.resolve(dir))
+
+        val bad = java.io.File(dir, "speed_estimator.onnx")
+        bad.writeText("not-a-real-onnx")
+        assertEquals("mock", OnnxResolver.resolve(dir))
+
+        val good = java.io.File(dir, "speed_estimator.onnx")
+        good.writeBytes(ByteArray(32) { it.toByte() })
+        if (BuildConfig.ENABLE_ONNX_RUNTIME) {
+            assertTrue(OnnxResolver.resolve(dir).endsWith("speed_estimator.onnx"))
+        } else {
+            assertEquals("mock", OnnxResolver.resolve(dir))
+        }
+    }
 }
 
 class OutageAndReplayTest {
