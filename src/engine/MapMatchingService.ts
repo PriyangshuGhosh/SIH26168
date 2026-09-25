@@ -27,6 +27,8 @@ export interface MapMatchResult {
   distanceToRoadMeters: number;
   headingRad: number;
   confidence: number;
+  // Heading residual between vehicle yaw and road direction, radians.
+  headingErrorRad: number;
 }
 
 // Built-in Visakhapatnam Simhachalam Tunnel corridor road segments
@@ -134,6 +136,7 @@ export class MapMatcher {
         distanceToRoadMeters: bestDist,
         headingRad: bestHeading,
         confidence,
+        headingErrorRad: this.angularDifference(headingRad ?? bestHeading, bestHeading),
       };
     }
 
@@ -146,7 +149,16 @@ export class MapMatcher {
       distanceToRoadMeters: bestDist,
       headingRad: headingRad ?? 0,
       confidence: 0,
+      headingErrorRad: 0,
     };
+  }
+
+  private angularDifference(a: number, b: number): number {
+    const twoPi = 2 * Math.PI;
+    let d = (a - b) % twoPi;
+    if (d > Math.PI) d -= twoPi;
+    if (d < -Math.PI) d += twoPi;
+    return d;
   }
 
   private projectPointToSegment(

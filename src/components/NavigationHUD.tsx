@@ -32,6 +32,7 @@ interface NavigationHUDProps {
   navState: NavigationState;
   gnssAvailable: boolean;
   onToggleGnssBlackout: () => void;
+  onToggleRoadConstraint: () => void;
   onTrigger700Regression: () => void;
   onClearInjection: () => void;
   gnssBlackout: boolean;
@@ -41,6 +42,7 @@ export const NavigationHUD: React.FC<NavigationHUDProps> = ({
   navState,
   gnssAvailable,
   onToggleGnssBlackout,
+  onToggleRoadConstraint,
   onTrigger700Regression,
   onClearInjection,
   gnssBlackout,
@@ -143,6 +145,20 @@ export const NavigationHUD: React.FC<NavigationHUDProps> = ({
 
               <button
                 type="button"
+                onClick={onToggleRoadConstraint}
+                className={`px-3.5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all flex items-center gap-1.5 border ${
+                  navState.roadConstraintEnabled
+                    ? "bg-[#00e5ff]/20 text-[#00e5ff] border-[#00e5ff]/50"
+                    : "bg-[#141b22] text-[#9aa0a6] border-[#1f2a33] hover:text-white hover:border-[#00e5ff]/40"
+                }`}
+                title="Softly constrain the GNSS-denied estimate toward a high-confidence road match"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                {navState.roadConstraintEnabled ? "ROAD CONSTRAINT: ON" : "ROAD CONSTRAINT: OFF"}
+              </button>
+
+              <button
+                type="button"
                 onClick={onTrigger700Regression}
                 className="px-3.5 py-2.5 rounded-xl bg-[#141b22] hover:bg-[#1f2a33] text-[#ff8a80] border border-[#ff1744]/30 font-mono text-xs font-semibold transition-all flex items-center gap-1.5"
                 title="Inject 700 km/h (194.4 m/s) speed anomaly to verify SpeedGuard safety refusal"
@@ -152,8 +168,15 @@ export const NavigationHUD: React.FC<NavigationHUDProps> = ({
               </button>
             </div>
 
-            <div className="text-[11px] font-mono text-[#9aa0a6]">
-              Corridor: <span className="text-white font-bold">NH16 Simhachalam Tunnel</span>
+            <div className="text-[11px] font-mono text-[#9aa0a6] flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+              <span>Corridor: <span className="text-white font-bold">NH16 Simhachalam Tunnel</span></span>
+              {navState.roadConstraintEnabled && (
+                <span className={navState.roadConstraintActive ? "text-[#00e676] font-bold" : "text-[#ff9100] font-bold"}>
+                  {navState.roadConstraintActive
+                    ? `MAP LOCK ACTIVE · ${navState.roadConstraintOffsetMeters?.toFixed(1) ?? "--"}m`
+                    : "WAITING FOR HIGH-CONFIDENCE ROAD MATCH"}
+                </span>
+              )}
             </div>
           </div>
         </div>

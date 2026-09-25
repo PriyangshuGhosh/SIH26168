@@ -44,6 +44,7 @@ export default function App() {
 
   const [injectedSpeedMps, setInjectedSpeedMps] = useState<number | null>(null);
   const [gnssBlackout, setGnssBlackout] = useState(false);
+  const [roadConstraintEnabled, setRoadConstraintEnabled] = useState(false);
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [realSensorState, setRealSensorState] = useState<RealSensorState>(() => ({
     isSupported: typeof window !== "undefined" && ("DeviceMotionEvent" in window || "ondevicemotion" in window),
@@ -118,6 +119,14 @@ export default function App() {
       engine.shutdown();
     };
   }, []);
+
+  const handleToggleRoadConstraint = () => {
+    setRoadConstraintEnabled((enabled) => {
+      const next = !enabled;
+      engineRef.current.setRoadConstraintEnabled(next);
+      return next;
+    });
+  };
 
   // 700 km/h regression test trigger
   const handleTrigger700Regression = () => {
@@ -306,6 +315,7 @@ export default function App() {
             navState={navState}
             gnssAvailable={!gnssBlackout}
             onToggleGnssBlackout={handleToggleGnssBlackout}
+            onToggleRoadConstraint={handleToggleRoadConstraint}
             onTrigger700Regression={handleTrigger700Regression}
             onClearInjection={handleClearInjection}
             gnssBlackout={gnssBlackout}

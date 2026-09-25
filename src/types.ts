@@ -85,6 +85,12 @@ export interface NavigationState {
   // Member 4 Map Matching
   matchedRoadName: string | null;
   distanceToRoadMeters: number | null;
+  // Optional road-corridor constraint (off by default for backward compatibility)
+  roadConstraintEnabled: boolean;
+  roadConstraintActive: boolean;
+  roadConstraintConfidence: number;
+  roadConstraintOffsetMeters: number | null;
+  roadConstraintCorrectionMeters: number;
 }
 
 export function emptyNavigationState(): NavigationState {
@@ -120,6 +126,11 @@ export function emptyNavigationState(): NavigationState {
     alignmentConfidence: 0.92,
     matchedRoadName: "NH16 Simhachalam Corridor",
     distanceToRoadMeters: 1.2,
+    roadConstraintEnabled: false,
+    roadConstraintActive: false,
+    roadConstraintConfidence: 0,
+    roadConstraintOffsetMeters: null,
+    roadConstraintCorrectionMeters: 0,
   };
 }
 

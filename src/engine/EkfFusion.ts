@@ -142,6 +142,37 @@ export class EkfFusion {
     return passed;
   }
 
+  // Optional soft road-corridor position measurement.
+  // This is deliberately a Kalman measurement update rather than a hard snap:
+  // the EKF remains free to reject/down-weight inconsistent map geometry.
+  updateRoadPosition(
+    north: number,
+    east: number,
+    varianceM2: number
+  ): boolean {
+    if (
+      !Number.isFinite(north) ||
+      !Number.isFinite(east) ||
+      !Number.isFinite(varianceM2) ||
+      varianceM2 <= 0
+    ) {
+      return false;
+    }
+
+    const r = Math.max(1.0, varianceM2);
+    const northOk = this.updateScalar(
+      north - this.x[0],
+      [1, 0, 0, 0, 0, 0, 0, 0],
+      r
+    );
+    const eastOk = this.updateScalar(
+      east - this.x[1],
+      [0, 1, 0, 0, 0, 0, 0, 0],
+      r
+    );
+    return northOk && eastOk;
+  }
+
   // GNSS Measurement Update (North, East, and 2D velocity)
   updateGnss(t: number, north: number, east: number, accuracyM: number, speedMps?: number): boolean {
     if (!Number.isFinite(north) || !Number.isFinite(east)) return false;
