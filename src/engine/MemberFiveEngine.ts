@@ -24,6 +24,16 @@ export interface EngineConfig {
   regions?: RoadPackRegion[];
   gnssStaleMs?: number;
   drDecayPerSec?: number;
+  /** Optional soft road-corridor constraint. Disabled by default. */
+  roadConstraintEnabled?: boolean;
+  /** Maximum lateral distance from road centerline accepted for correction. */
+  roadConstraintMaxOffsetM?: number;
+  /** Minimum map-match confidence required for correction. */
+  roadConstraintMinConfidence?: number;
+  /** Maximum yaw mismatch accepted for correction. */
+  roadConstraintMaxHeadingErrorRad?: number;
+  /** Upper bound on map measurement variance. */
+  roadConstraintMaxVarianceM2?: number;
 }
 
 export class MemberFiveEngine {
@@ -35,6 +45,11 @@ export class MemberFiveEngine {
   private activeRegion: RoadPackRegion | null = null;
   private gnssStaleMs: number;
   private drDecayPerSec: number;
+  private roadConstraintEnabled: boolean;
+  private roadConstraintMaxOffsetM: number;
+  private roadConstraintMinConfidence: number;
+  private roadConstraintMaxHeadingErrorRad: number;
+  private roadConstraintMaxVarianceM2: number;
   private lastRejection: RejectionReason = RejectionReason.NONE;
   private engineFault = false;
   private injectedSpeedMps: number | null = null;
@@ -57,6 +72,12 @@ export class MemberFiveEngine {
     this.regions = cfg.regions ?? BUILTIN_REGIONS;
     this.gnssStaleMs = cfg.gnssStaleMs ?? 1500;
     this.drDecayPerSec = cfg.drDecayPerSec ?? 0.015;
+    this.roadConstraintEnabled = cfg.roadConstraintEnabled ?? false;
+    this.roadConstraintMaxOffsetM = cfg.roadConstraintMaxOffsetM ?? 25.0;
+    this.roadConstraintMinConfidence = cfg.roadConstraintMinConfidence ?? 0.65;
+    this.roadConstraintMaxHeadingErrorRad =
+      cfg.roadConstraintMaxHeadingErrorRad ?? (60 * Math.PI) / 180;
+    this.roadConstraintMaxVarianceM2 = cfg.roadConstraintMaxVarianceM2 ?? 36.0;
   }
 
   init(): boolean {
@@ -294,6 +315,19 @@ export class MemberFiveEngine {
     this.refreshMapMatch();
   }
 
+  setRoadConstraintEnabled(enabled: boolean): void {
+    this.roadConstraintEnabled = Boolean(enabled);
+    this.state.roadConstraintEnabled = this.roadConstraintEnabled;
+    if (!this.roadConstraintEnabled) {
+      this.state.roadConstraintActive = false;
+      this.state.roadConstraintCorrectionMeters = 0;
+    }
+  }
+
+  isRoadConstraintEnabled(): boolean {
+    return this.roadConstraintEnabled;
+  }
+
   setInjectedSpeed(mps: number | null): void {
     this.injectedSpeedMps = mps;
     if (mps !== null) {
@@ -352,6 +386,64 @@ export class MemberFiveEngine {
     );
     this.state.matchedRoadName = matchRes.matchedSegmentLabel;
     this.state.distanceToRoadMeters = matchRes.distanceToRoadMeters;
+    this.state.roadConstraintEnabled = this.roadConstraintEnabled;
+    this.state.roadConstraintActive = false;
+    this.state.roadConstraintConfidence = matchRes.confidence;
+    this.state.roadConstraintOffsetMeters = Number.isFinite(matchRes.distanceToRoadMeters)
+      ? matchRes.distanceToRoadMeters
+      : null;
+    this.state.roadConstraintCorrectionMeters = 0;
+
+    // Optional soft road-corridor correction. Never hard-snaps the estimate.
+    // It is only active during GNSS-denied navigation and requires:
+    // 1) a valid local road region, 2) strong map-match confidence,
+    // 3) small lateral offset, and 4) heading consistency.
+    if (
+      this.roadConstraintEnabled &&
+      this.state.mode === NavigationMode.DEAD_RECKONING &&
+      res.active &&
+      matchRes.matched &&
+      matchRes.confidence >= this.roadConstraintMinConfidence &&
+      matchRes.distanceToRoadMeters <= this.roadConstraintMaxOffsetM &&
+      Math.abs(matchRes.headingErrorRad) <= this.roadConstraintMaxHeadingErrorRad
+    ) {
+      const beforeNorth = this.ekf.x[0];
+      const beforeEast = this.ekf.x[1];
+      const target = this.latLonToEnu(matchRes.snappedLat, matchRes.snappedLon);
+      const deltaNorth = target.north - beforeNorth;
+      const deltaEast = target.east - beforeEast;
+      const targetDistance = Math.hypot(deltaNorth, deltaEast);
+      // Limit the requested map correction before it reaches the EKF so the
+      // optional feature can never create a large visual position jump.
+      const maxCorrectionM = Math.min(this.roadConstraintMaxOffsetM, 8.0);
+      const scale =
+        targetDistance > maxCorrectionM && targetDistance > 1e-6
+          ? maxCorrectionM / targetDistance
+          : 1.0;
+      const enu = {
+        north: beforeNorth + deltaNorth * scale,
+        east: beforeEast + deltaEast * scale,
+      };
+      const confidence = Math.max(this.roadConstraintMinConfidence, matchRes.confidence);
+      const variance = Math.min(
+        this.roadConstraintMaxVarianceM2,
+        Math.max(4.0, 4.0 / (confidence * confidence))
+      );
+      if (this.ekf.updateRoadPosition(enu.north, enu.east, variance)) {
+        const correctionM = Math.hypot(
+          this.ekf.x[0] - beforeNorth,
+          this.ekf.x[1] - beforeEast
+        );
+        // Guard against a pathological map update causing a visible jump.
+        if (correctionM <= Math.min(this.roadConstraintMaxOffsetM, 8.0)) {
+          this.state.roadConstraintActive = true;
+          this.state.roadConstraintCorrectionMeters = correctionM;
+          const constrained = this.enuToLatLon(this.ekf.x[0], this.ekf.x[1]);
+          this.state.latitudeDeg = constrained.lat;
+          this.state.longitudeDeg = constrained.lon;
+        }
+      }
+    }
 
     if (res.outOfCoverage || !res.active) {
       this.state.mapMatchStatus = MapMatchStatus.NO_REGION;
